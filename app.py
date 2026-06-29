@@ -96,7 +96,8 @@ if headlines:
     # Send headlines to Claude for sentiment analysis
     st.subheader("AI Sentiment Analysis")
     with st.spinner("Claude is analyzing market sentiment..."):
-        client = anthropic.Anthropic()
+        api_key = os.getenv("ANTHROPIC_API_KEY") or st.secrets.get("ANTHROPIC_API_KEY", None)
+        client = anthropic.Anthropic(api_key=api_key)
         headline_text = "\n".join(headlines)
         sentiment_response = client.messages.create(
             model="claude-sonnet-4-6",
