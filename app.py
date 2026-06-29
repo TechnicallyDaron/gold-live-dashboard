@@ -102,7 +102,7 @@ def render_live_chart():
         yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', tickprefix="$", tickformat=",.0f"),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.components.v1.html(fig.to_html(include_plotlyjs='cdn', full_html=False), height=550)
 
 # Run the isolated chart fragment
 render_live_chart()
