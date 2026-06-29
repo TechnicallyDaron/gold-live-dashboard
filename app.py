@@ -210,6 +210,7 @@ valid = gold.dropna(subset=["Upper_Band", "Lower_Band", "Baseline", "Macro_Filte
 
 position = 0  # 0 = cash, 1 = long, -1 = short
 entry_price = 0
+entry_date = None  # <--- ADD THIS LINE HERE TO INITIALIZE IT
 total_strategy_return = 0
 trades = []
 
