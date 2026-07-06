@@ -124,6 +124,125 @@ def format_pulse_line(asset: str, unit: str, bias: dict, reason: str) -> str:
             f"    now {bias['dist_to_arm_pct']:+.1f}% from arm level (${bias['arm_level']:,.2f})")
 
 
+
+# =====================================================================
+# 🛡 POSITION GUARDIAN — enforces the exit rules you set when sober
+# =====================================================================
+POSITIONS_FILE = "positions.json"
+TIME_STOP_WARNINGS = [3, 1, 0]      # days before your self-imposed time stop
+EXPIRY_WARNINGS = [7, 3, 1, 0]      # days before contract expiration
+
+
+def fetch_option_mark(ticker: str, expiration: str, strike: float, opt_type: str):
+    """Best-effort live option price via the yfinance chain. Returns float or None.
+    Option feeds are flaky — every caller must survive a None."""
+    try:
+        chain = yf.Ticker(ticker).option_chain(expiration)
+        table = chain.puts if opt_type.lower() == "put" else chain.calls
+        row = table[abs(table["strike"] - strike) < 0.001]
+        if row.empty:
+            return None
+        bid = float(row["bid"].iloc[0] or 0)
+        ask = float(row["ask"].iloc[0] or 0)
+        last = float(row["lastPrice"].iloc[0] or 0)
+        if bid > 0 and ask > 0:
+            return round((bid + ask) / 2, 2)
+        return last if last > 0 else None
+    except Exception:
+        return None
+
+
+def guardian_check(meta: dict, underlying_prices: dict, now) -> int:
+    """Check every logged position against its exit rules. Returns alert count.
+    Dedupe: each rule fires once (date-keyed for the premium stop) via
+    sent-keys stored in meta['guardian'][position_id]."""
+    if not os.path.exists(POSITIONS_FILE):
+        return 0
+    try:
+        with open(POSITIONS_FILE) as f:
+            positions = json.load(f)
+    except Exception as e:
+        print(f"positions.json unreadable: {e}", file=sys.stderr)
+        return 0
+
+    gstate = meta.get("guardian", {})
+    today = now.date()
+    alerts = 0
+
+    for pid, pos in positions.items():
+        sent = set(gstate.get(pid, []))
+        label = f"{pos['asset']} ${pos['strike']:.2f}{pos['type'][0].upper()} {pos['expiration']}"
+        msgs = []
+
+        # ── Date rules ───────────────────────────────────────
+        try:
+            exp = datetime.strptime(pos["expiration"], "%Y-%m-%d").date()
+            dte = (exp - today).days
+            for d in EXPIRY_WARNINGS:
+                key = f"exp{d}"
+                if dte == d and key not in sent:
+                    when = "EXPIRES TODAY" if d == 0 else f"{d} day(s) to expiration"
+                    msgs.append((key, f"⏳ {when}. All remaining premium is time value at risk."))
+        except Exception:
+            pass
+
+        if pos.get("time_stop"):
+            try:
+                ts = datetime.strptime(pos["time_stop"], "%Y-%m-%d").date()
+                dts = (ts - today).days
+                for d in TIME_STOP_WARNINGS:
+                    key = f"ts{d}"
+                    if dts == d and key not in sent:
+                        when = "is TODAY" if d == 0 else f"in {d} day(s)"
+                        msgs.append((key, f"🕐 Your self-imposed TIME STOP {when}. "
+                                          f"No confirmed move = your rule says salvage remaining premium."))
+            except Exception:
+                pass
+
+        # ── Underlying invalidation ─────────────────────────
+        u_price = underlying_prices.get(pos["ticker"])
+        if u_price is None:
+            try:
+                q = yf.Ticker(pos["ticker"]).fast_info
+                u_price = float(q["last_price"])
+            except Exception:
+                u_price = None
+        if u_price is not None:
+            if pos.get("invalidation_above") and u_price > float(pos["invalidation_above"]) and "inval" not in sent:
+                msgs.append(("inval", f"❌ THESIS INVALIDATED: underlying ${u_price:,.2f} is ABOVE your "
+                                      f"invalidation level ${float(pos['invalidation_above']):,.2f}. "
+                                      f"Your rule: exit, don't average."))
+            if pos.get("invalidation_below") and u_price < float(pos["invalidation_below"]) and "inval" not in sent:
+                msgs.append(("inval", f"❌ THESIS INVALIDATED: underlying ${u_price:,.2f} is BELOW your "
+                                      f"invalidation level ${float(pos['invalidation_below']):,.2f}. "
+                                      f"Your rule: exit, don't average."))
+
+        # ── Premium stop (best-effort, re-alerts daily while breached) ──
+        if pos.get("premium_stop"):
+            mark = fetch_option_mark(pos["ticker"], pos["expiration"], float(pos["strike"]), pos["type"])
+            if mark is not None and mark <= float(pos["premium_stop"]):
+                key = f"prem{today.isoformat()}"
+                if key not in sent:
+                    pnl = (mark - float(pos["premium_paid"])) / float(pos["premium_paid"]) * 100
+                    msgs.append((key, f"🛑 PREMIUM STOP HIT: contract marks ~${mark:.2f} vs your "
+                                      f"${float(pos['premium_stop']):.2f} stop ({pnl:+.0f}% vs entry). "
+                                      f"Your rule: out mechanically, no renegotiation."))
+
+        if msgs:
+            body = "\n\n".join(m for _, m in msgs)
+            note = pos.get("notes", "")
+            text = (f"🛡 <b>Position Guardian</b> — {label}\n\n{body}"
+                    + (f"\n\n<i>Thesis on file: {note}</i>" if note else "")
+                    + "\n\n<i>These are YOUR rules, set before the position went live.</i>")
+            if send_telegram(text):
+                sent.update(k for k, _ in msgs)
+                alerts += len(msgs)
+
+        gstate[pid] = sorted(sent)
+
+    meta["guardian"] = gstate
+    return alerts
+
 def main():
     with open(WATCHLIST_FILE) as f:
         watchlist = json.load(f)
@@ -152,6 +271,7 @@ def main():
 
     digest_lines = []
     pulse_lines = []
+    underlying_prices = {}
     new_state = {}
     changes = 0
     failures = 0
@@ -171,6 +291,7 @@ def main():
 
         state = bias["state"]
         unit = details.get("unit", "")
+        underlying_prices[details["ticker"]] = bias["price"]
         new_state[asset] = {
             "state": state,
             "price": round(bias["price"], 2),
@@ -216,13 +337,16 @@ def main():
         # Clock advances whether or not anything moved — the next check is ~2h out
         meta["last_pulse"] = now.isoformat(timespec="seconds")
 
+    guardian_alerts = guardian_check(meta, underlying_prices, now)
+
     meta["pulse_ref"] = pulse_refs
     new_state["_meta"] = meta
     with open(STATE_FILE, "w") as f:
         json.dump(new_state, f, indent=2)
 
     print(f"Checked {len([a for a in watchlist if not a.startswith('_')])} assets | "
-          f"{changes} state change(s) | {len(pulse_lines)} pulse mover(s) | {failures} feed failure(s)")
+          f"{changes} state change(s) | {len(pulse_lines)} pulse mover(s) | "
+          f"{guardian_alerts} guardian alert(s) | {failures} feed failure(s)")
     if failures == len(watchlist) and len(watchlist) > 0:
         sys.exit(1)
 

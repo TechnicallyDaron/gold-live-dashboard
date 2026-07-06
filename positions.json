@@ -1,0 +1,14 @@
+{
+  "sofi-1750p-aug07": {
+    "asset": "SOFI",
+    "ticker": "SOFI",
+    "type": "put",
+    "strike": 17.50,
+    "expiration": "2026-08-07",
+    "premium_paid": 1.04,
+    "premium_stop": 0.52,
+    "time_stop": "2026-07-20",
+    "invalidation_above": 19.00,
+    "notes": "Zone breakdown thesis. ADJUST invalidation_above to your actual zone ceiling from the chart."
+  }
+}
