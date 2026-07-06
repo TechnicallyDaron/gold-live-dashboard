@@ -1,22 +1,22 @@
 {
   "Gold": {
     "state": "\u26aa NO TRADE",
-    "price": 4155.2,
-    "checked_at": "2026-07-06T16:32:59Z"
+    "price": 4164.8,
+    "checked_at": "2026-07-06T17:00:38Z"
   },
   "S&P 500": {
     "state": "\u26aa NO TRADE",
-    "price": 7533.66,
-    "checked_at": "2026-07-06T16:32:59Z"
+    "price": 7532.97,
+    "checked_at": "2026-07-06T17:00:38Z"
   },
   "SOFI": {
     "state": "\ud83d\udfe1 SHORT WATCH",
-    "price": 19.02,
-    "checked_at": "2026-07-06T16:32:59Z"
+    "price": 18.9,
+    "checked_at": "2026-07-06T17:00:38Z"
   },
   "_meta": {
     "last_digest": "2026-07-06",
-    "last_pulse": "2026-07-06T14:41:53+00:00",
+    "last_pulse": "2026-07-06T17:00:38+00:00",
     "pulse_ref": {
       "Gold": {
         "z": -0.31362305677284047,
@@ -27,8 +27,8 @@
         "price": 7520.39013671875
       },
       "SOFI": {
-        "z": 1.2423463999935442,
-        "price": 18.549999237060547
+        "z": 1.5759268045396468,
+        "price": 18.895000457763672
       }
     },
     "guardian": {
