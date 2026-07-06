@@ -1,0 +1,5 @@
+{
+  "Gold": {"ticker": "GC=F", "name": "Gold Market", "unit": "/oz"},
+  "S&P 500": {"ticker": "^GSPC", "name": "S&P 500 Index", "unit": ""},
+  "SOFI": {"ticker": "SOFI", "name": "SoFi Technologies", "unit": "/sh"}
+}

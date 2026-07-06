@@ -3,6 +3,7 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import os
+import json
 import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
@@ -10,6 +11,8 @@ load_dotenv()
 import plotly.graph_objects as go
 import anthropic
 from datetime import datetime, timedelta
+
+from signal_engine import add_indicators, compute_bias, STOP_LOSS_PCT
 
 # ── Page config ──────────────────────────────────────────────
 st.set_page_config(
@@ -19,21 +22,80 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# ── Mobile polish: responsive CSS ────────────────────────────
+st.markdown("""
+<style>
+/* Tighter chrome on all screens */
+.block-container { padding-top: 2.2rem; padding-bottom: 2rem; }
+
+/* Phone-width adjustments */
+@media (max-width: 640px) {
+    .block-container { padding-left: 0.9rem; padding-right: 0.9rem; }
+    h1 { font-size: 1.45rem !important; }
+    h2 { font-size: 1.2rem !important; }
+    h3 { font-size: 1.05rem !important; }
+    [data-testid="stMetricValue"] { font-size: 1.15rem !important; }
+    [data-testid="stMetricLabel"] { font-size: 0.75rem !important; }
+    .asset-card h2 { font-size: 19px !important; }
+    .asset-card h3 { font-size: 16px !important; }
+    .asset-card { padding: 14px !important; }
+}
+</style>
+""", unsafe_allow_html=True)
+
 # ── Anthropic client: fail loudly, once, at startup ─────────
 API_KEY = os.getenv("ANTHROPIC_API_KEY")
 client = anthropic.Anthropic(api_key=API_KEY) if API_KEY else None
 
-# ── Constants ────────────────────────────────────────────────
-asset_mapping = {
+
+# =====================================================================
+# 📋 WATCHLIST — single source of truth shared with the alert bot
+# =====================================================================
+WATCHLIST_FILE = "watchlist.json"
+DEFAULT_WATCHLIST = {
     "Gold": {"ticker": "GC=F", "name": "Gold Market", "unit": "/oz"},
     "S&P 500": {"ticker": "^GSPC", "name": "S&P 500 Index", "unit": ""},
     "SOFI": {"ticker": "SOFI", "name": "SoFi Technologies", "unit": "/sh"}
 }
-STOP_LOSS_PCT = 0.025
 
-# ── Session state ────────────────────────────────────────────
+
+def load_watchlist_from_disk():
+    try:
+        with open(WATCHLIST_FILE) as f:
+            wl = json.load(f)
+        if isinstance(wl, dict) and wl:
+            return wl
+    except Exception:
+        pass
+    return dict(DEFAULT_WATCHLIST)
+
+
+def save_watchlist_to_disk(wl: dict) -> bool:
+    try:
+        with open(WATCHLIST_FILE, "w") as f:
+            json.dump(wl, f, indent=2)
+        return True
+    except Exception:
+        return False
+
+
+if "watchlist" not in st.session_state:
+    st.session_state.watchlist = load_watchlist_from_disk()
+
 if "active_trades" not in st.session_state:
     st.session_state.active_trades = {}
+
+
+def get_watchlist() -> dict:
+    return st.session_state.watchlist
+
+
+def get_selected_asset():
+    wl = get_watchlist()
+    sel = st.session_state.get("asset_select")
+    if sel in wl:
+        return sel
+    return list(wl.keys())[0]
 
 
 # =====================================================================
@@ -46,7 +108,7 @@ def md_safe(text: str) -> str:
 
 @st.cache_data(ttl=60)
 def load_market_data(ticker):
-    """Daily OHLC + indicator columns. Asset-agnostic column names."""
+    """Daily OHLC + indicator columns via the shared signal engine."""
     end = datetime.today()
     start = end - timedelta(days=1825)
     df = yf.download(ticker, start=start, end=end, auto_adjust=True, progress=False)
@@ -56,13 +118,7 @@ def load_market_data(ticker):
 
     df = df[["Open", "High", "Low", "Close"]].astype(float).copy()
     df = df.rename(columns={"Close": "Price"})
-
-    df["Baseline"] = df["Price"].ewm(span=20, adjust=False).mean()
-    df["Std_Dev"] = df["Price"].rolling(20).std()
-    df["Upper_Band"] = df["Baseline"] + (df["Std_Dev"] * 2.0)
-    df["Lower_Band"] = df["Baseline"] - (df["Std_Dev"] * 2.0)
-    df["Macro_Filter"] = df["Price"].ewm(span=200, adjust=False).mean()
-    return df
+    return add_indicators(df)
 
 
 @st.cache_data(ttl=120)
@@ -71,7 +127,6 @@ def fetch_portal_quote(ticker):
     Robust quote fetch with fallback. Returns (price, change, pct) or None.
     NEVER fabricates a $0.00 quote — a dead feed must look dead.
     """
-    # Attempt 1: recent daily bars (1mo window survives holidays/weekends)
     try:
         df = yf.download(ticker, period="1mo", auto_adjust=True, progress=False)
         if isinstance(df.columns, pd.MultiIndex):
@@ -83,8 +138,6 @@ def fetch_portal_quote(ticker):
     except Exception:
         pass
 
-    # Attempt 2: fast_info endpoint (different Yahoo route, often survives
-    # when the chart download endpoint is rate-limited)
     try:
         fi = yf.Ticker(ticker).fast_info
         c = float(fi["last_price"])
@@ -92,62 +145,6 @@ def fetch_portal_quote(ticker):
         return c, c - p, ((c - p) / p) * 100
     except Exception:
         return None
-
-
-# =====================================================================
-# 🎯 BIAS ENGINE (pure math — no AI, no gate, instant)
-# =====================================================================
-def compute_bias(df):
-    """
-    Translate the current statistical state into a directional bias,
-    the evidence behind it, and concrete trigger levels.
-    """
-    row = df.dropna(subset=["Baseline", "Std_Dev", "Upper_Band", "Lower_Band", "Macro_Filter"]).iloc[-1]
-    price = float(row["Price"])
-    baseline = float(row["Baseline"])
-    std = float(row["Std_Dev"])
-    upper = float(row["Upper_Band"])
-    lower = float(row["Lower_Band"])
-    macro = float(row["Macro_Filter"])
-
-    z = (price - baseline) / std if std > 0 else 0.0
-    trend_up = price > macro
-
-    if price < lower and trend_up:
-        state, direction, color = "🟢 LONG-REVERSION ARMED", "long", "green"
-        headline = "Price is in the Discount Array with HTF trend support. This is the exact setup the strategy trades."
-    elif price > upper and not trend_up:
-        state, direction, color = "🔴 SHORT-REVERSION ARMED", "short", "red"
-        headline = "Price is in the Premium Array against a bearish HTF trend. Short-reversion conditions are met."
-    elif z <= -1.5 and trend_up:
-        state, direction, color = "🟡 LONG WATCH", "long", "orange"
-        headline = "Price is approaching the Lower Band with trend support. Not armed yet — watch the trigger level."
-    elif z >= 1.5 and not trend_up:
-        state, direction, color = "🟡 SHORT WATCH", "short", "orange"
-        headline = "Price is approaching the Upper Band in a bearish HTF regime. Not armed yet."
-    else:
-        state, direction, color = "⚪ NO TRADE", None, "gray"
-        headline = "Price is inside statistical equilibrium, or the band break conflicts with the HTF trend. The strategy has no edge here — standing aside IS the position."
-
-    # Trigger levels (direction-aware)
-    if direction == "short" or (direction is None and z > 0):
-        arm_level = upper
-        invalidation = upper * (1 + STOP_LOSS_PCT)
-    else:
-        arm_level = lower
-        invalidation = lower * (1 - STOP_LOSS_PCT)
-
-    return {
-        "state": state, "direction": direction, "color": color, "headline": headline,
-        "price": price, "baseline": baseline, "z": z,
-        "upper": upper, "lower": lower, "macro": macro,
-        "trend": "BULLISH (above 200 EMA)" if trend_up else "BEARISH (below 200 EMA)",
-        "arm_level": arm_level,
-        "invalidation": invalidation,
-        "target": baseline,
-        "dist_to_arm_pct": ((arm_level - price) / price) * 100,
-        "dist_to_target_pct": ((baseline - price) / price) * 100,
-    }
 
 
 # =====================================================================
@@ -404,66 +401,66 @@ Provide a critical, data-driven cross-examination structured exactly as follows:
 
 def require_client(feature: str) -> bool:
     if client is None:
-        st.error(f"⚠️ ANTHROPIC_API_KEY missing — {feature} is disabled until it's set in your .env file.")
+        st.error(f"⚠️ ANTHROPIC_API_KEY missing — {feature} is disabled until it's set in your .env file (or Streamlit Cloud Secrets).")
         return False
     return True
-
-
-def get_selected_asset():
-    return st.session_state.get("asset_select", list(asset_mapping.keys())[0])
 
 
 # =====================================================================
 # PAGE 1: 🎛️ COMMAND CENTER
 # =====================================================================
 def page_command_center():
+    wl = get_watchlist()
     st.title("🎛️ Command Center")
     st.caption(f"Mean Reversion Terminal · Updated: {datetime.now().strftime('%B %d, %Y %I:%M %p')}")
 
     if client is None:
-        st.error("⚠️ ANTHROPIC_API_KEY not found — AI features are disabled. Set it in your .env file.")
+        st.error("⚠️ ANTHROPIC_API_KEY not found — AI features are disabled.")
 
     st.subheader("Watchlist & Signal Status")
-    cols = st.columns(3)
 
-    for index, (asset_name, details) in enumerate(asset_mapping.items()):
-        quote = fetch_portal_quote(details["ticker"])
-        with cols[index]:
-            if quote is None:
+    names = list(wl.keys())
+    for row_start in range(0, len(names), 3):
+        row_names = names[row_start:row_start + 3]
+        cols = st.columns(len(row_names))
+        for col, asset_name in zip(cols, row_names):
+            details = wl[asset_name]
+            quote = fetch_portal_quote(details["ticker"])
+            with col:
+                if quote is None:
+                    st.markdown(
+                        f"""
+                        <div class="asset-card" style="border: 2px solid #5a2a2a; padding: 22px; border-radius: 12px; text-align: center; background-color: #1a1a1a; margin-bottom: 10px;">
+                            <h2 style="margin: 0; color: #FFFFFF; font-size: 24px;">{asset_name}</h2>
+                            <h3 style="margin: 8px 0; color: #FF6347; font-size: 20px;">— FEED DOWN —</h3>
+                            <p style="margin: 0; color: #888; font-size: 14px;">Quote source unavailable</p>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+                    continue
+
+                c_price, diff, pct = quote
+                color = "#32CD32" if diff >= 0 else "#FF6347"
+                sign = "+" if diff >= 0 else ""
+
+                try:
+                    bias = compute_bias(load_market_data(details["ticker"]))
+                    bias_label = bias["state"]
+                except Exception:
+                    bias_label = "⚪ DATA ERROR"
+
                 st.markdown(
                     f"""
-                    <div style="border: 2px solid #5a2a2a; padding: 22px; border-radius: 12px; text-align: center; background-color: #1a1a1a; margin-bottom: 10px;">
+                    <div class="asset-card" style="border: 2px solid #3e3e3e; padding: 22px; border-radius: 12px; text-align: center; background-color: #1a1a1a; margin-bottom: 10px;">
                         <h2 style="margin: 0; color: #FFFFFF; font-size: 24px;">{asset_name}</h2>
-                        <h3 style="margin: 8px 0; color: #FF6347; font-size: 20px;">— FEED DOWN —</h3>
-                        <p style="margin: 0; color: #888; font-size: 14px;">Quote source unavailable</p>
+                        <h3 style="margin: 8px 0; color: #CCCCCC; font-size: 20px;">${c_price:,.2f}{details.get('unit','')}</h3>
+                        <p style="margin: 0 0 8px 0; color: {color}; font-weight: bold; font-size: 15px;">{sign}{pct:.2f}% Today</p>
+                        <p style="margin: 0; color: #FFFFFF; font-size: 14px; font-weight: bold;">{bias_label}</p>
                     </div>
                     """,
                     unsafe_allow_html=True
                 )
-                continue
-
-            c_price, diff, pct = quote
-            color = "#32CD32" if diff >= 0 else "#FF6347"
-            sign = "+" if diff >= 0 else ""
-
-            # Compute the live bias state for the card
-            try:
-                bias = compute_bias(load_market_data(details["ticker"]))
-                bias_label = bias["state"]
-            except Exception:
-                bias_label = "⚪ DATA ERROR"
-
-            st.markdown(
-                f"""
-                <div style="border: 2px solid #3e3e3e; padding: 22px; border-radius: 12px; text-align: center; background-color: #1a1a1a; margin-bottom: 10px;">
-                    <h2 style="margin: 0; color: #FFFFFF; font-size: 24px;">{asset_name}</h2>
-                    <h3 style="margin: 8px 0; color: #CCCCCC; font-size: 20px;">${c_price:,.2f}{details['unit']}</h3>
-                    <p style="margin: 0 0 8px 0; color: {color}; font-weight: bold; font-size: 15px;">{sign}{pct:.2f}% Today</p>
-                    <p style="margin: 0; color: #FFFFFF; font-size: 14px; font-weight: bold;">{bias_label}</p>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
 
     st.info("👈 Pick an asset in the sidebar, then open **Bias Engine** for the full statistical breakdown and trigger levels.")
 
@@ -483,9 +480,10 @@ def page_command_center():
 # PAGE 2: 🎯 BIAS ENGINE (the core decision screen)
 # =====================================================================
 def page_bias_engine():
+    wl = get_watchlist()
     asset = get_selected_asset()
-    details = asset_mapping[asset]
-    st.title(f"🎯 Bias Engine — {details['name']}")
+    details = wl[asset]
+    st.title(f"🎯 Bias Engine — {details.get('name', asset)}")
 
     with st.spinner("Computing statistical state..."):
         try:
@@ -496,14 +494,13 @@ def page_bias_engine():
             st.error("Data feed failure for this asset. Try again shortly — Yahoo rate limits are usually temporary.")
             return
 
-    # ── 1. THE VERDICT ───────────────────────────────────────
     banner = {"green": st.success, "red": st.error, "orange": st.warning, "gray": st.info}[bias["color"]]
     banner(f"### {bias['state']}\n{bias['headline']}")
 
-    # ── 2. THE EVIDENCE ─────────────────────────────────────
     st.subheader("Evidence")
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Spot Price", f"${bias['price']:,.2f}{details['unit']}")
+    unit = details.get("unit", "")
+    c1.metric("Spot Price", f"${bias['price']:,.2f}{unit}")
     c2.metric("Deviation (Z-Score)", f"{bias['z']:+.2f}σ", help="Standard deviations from the 20 EMA equilibrium. ±2σ = band touch.")
     c3.metric("20 EMA Equilibrium", f"${bias['baseline']:,.2f}")
     c4.metric("HTF Trend (200 EMA)", bias["trend"].split(" ")[0], help=bias["trend"])
@@ -515,20 +512,17 @@ def page_bias_engine():
     c7.metric("Setup Win Rate (5yr)", f"{dir_stats['win_rate']*100:.1f}%", help=f"Based on {dir_stats['n']} historical trades of this direction.")
     c8.metric("Avg Win / Avg Loss", f"{dir_stats['avg_win']*100:+.1f}% / {dir_stats['avg_loss']*100:+.1f}%")
 
-    # ── 3. THE TRIGGERS ─────────────────────────────────────
     st.subheader("Action Levels")
     t1, t2, t3 = st.columns(3)
     t1.metric("Arm Level (band touch)", f"${bias['arm_level']:,.2f}", f"{bias['dist_to_arm_pct']:+.2f}% away", delta_color="off")
     t2.metric("Invalidation (stop zone)", f"${bias['invalidation']:,.2f}", help=f"Entry beyond this level violates the {STOP_LOSS_PCT*100:.1f}% risk budget the backtest assumes.")
     t3.metric("Reversion Target (20 EMA)", f"${bias['target']:,.2f}", f"{bias['dist_to_target_pct']:+.2f}% from spot", delta_color="off")
 
-    # ── 4. MACRO RISK OVERLAY ───────────────────────────────
     macro_events = fetch_forex_factory_red_folders()
     if macro_events:
         with st.expander(f"🚨 {len(macro_events)} high-impact macro events this week — gap risk on armed signals"):
             st.dataframe(pd.DataFrame(macro_events), use_container_width=True, hide_index=True)
 
-    # ── 5. ON-DEMAND AI INTERPRETATION ──────────────────────
     st.markdown("---")
     if st.button("🤖 Generate AI Bias Memo", use_container_width=True):
         if require_client("the AI bias memo"):
@@ -550,7 +544,7 @@ def page_bias_engine():
             ) or "- None detected"
             with st.spinner("Interpreting the numbers..."):
                 try:
-                    memo = ai_bias_memo(client, details["name"], details["ticker"],
+                    memo = ai_bias_memo(client, details.get("name", asset), details["ticker"],
                                         bias_snapshot, stats_snapshot, macro_snapshot)
                     st.markdown(md_safe(memo))
                 except Exception:
@@ -561,9 +555,10 @@ def page_bias_engine():
 # PAGE 3: 📈 LIVE CHART
 # =====================================================================
 def page_live_chart():
+    wl = get_watchlist()
     asset = get_selected_asset()
-    details = asset_mapping[asset]
-    st.title(f"📈 Live Chart — {details['name']}")
+    details = wl[asset]
+    st.title(f"📈 Live Chart — {details.get('name', asset)}")
 
     with st.expander("📖 How to read this chart"):
         st.markdown("""
@@ -590,7 +585,7 @@ def page_live_chart():
 
         fig.update_layout(
             template="plotly_dark", paper_bgcolor="#1a1a1a", plot_bgcolor="#1a1a1a",
-            margin=dict(l=20, r=20, t=20, b=20), height=600, hovermode="x unified",
+            margin=dict(l=20, r=20, t=20, b=20), height=550, hovermode="x unified",
             xaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)'),
             yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)', tickprefix="$", tickformat=",.2f"),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
@@ -605,9 +600,10 @@ def page_live_chart():
 # PAGE 4: 📰 NEWS & SENTIMENT
 # =====================================================================
 def page_sentiment():
+    wl = get_watchlist()
     asset = get_selected_asset()
-    details = asset_mapping[asset]
-    st.title(f"📰 News & Sentiment — {details['name']}")
+    details = wl[asset]
+    st.title(f"📰 News & Sentiment — {details.get('name', asset)}")
 
     with st.spinner("Scanning market news..."):
         headlines = fetch_market_headlines(details["ticker"])
@@ -625,7 +621,7 @@ def page_sentiment():
         if require_client("sentiment analysis"):
             with st.spinner("Analyzing sentiment..."):
                 try:
-                    result = ai_sentiment(client, details["name"], details["ticker"], "\n".join(headlines))
+                    result = ai_sentiment(client, details.get("name", asset), details["ticker"], "\n".join(headlines))
                     st.markdown(md_safe(result))
                 except Exception:
                     st.error("AI call failed — check your API key, network, or rate limits.")
@@ -635,9 +631,10 @@ def page_sentiment():
 # PAGE 5: 📊 BACKTEST LAB
 # =====================================================================
 def page_backtest():
+    wl = get_watchlist()
     asset = get_selected_asset()
-    details = asset_mapping[asset]
-    st.title(f"📊 Backtest Lab — {details['name']}")
+    details = wl[asset]
+    st.title(f"📊 Backtest Lab — {details.get('name', asset)}")
     st.caption("Honest execution model: signals on the close, fills at the NEXT bar's open, intraday stop checks, compounded equity.")
 
     with st.spinner("Running 5-year backtest..."):
@@ -672,9 +669,10 @@ def page_backtest():
 # PAGE 6: 🦅 OPTIONS CO-PILOT (optional — never a gate to analysis)
 # =====================================================================
 def page_copilot():
+    wl = get_watchlist()
     asset = get_selected_asset()
-    details = asset_mapping[asset]
-    st.title(f"🦅 Options Co-Pilot — {details['name']}")
+    details = wl[asset]
+    st.title(f"🦅 Options Co-Pilot — {details.get('name', asset)}")
     st.caption("Optional: log a live options position to have it stress-tested against the statistics. All analysis pages work without this.")
 
     if asset not in st.session_state.active_trades:
@@ -756,6 +754,73 @@ def page_copilot():
 
 
 # =====================================================================
+# PAGE 7: ⚙️ WATCHLIST MANAGER
+# =====================================================================
+def page_watchlist():
+    wl = get_watchlist()
+    st.title("⚙️ Watchlist Manager")
+    st.caption("This watchlist drives every page AND the Telegram alert bot (both read watchlist.json).")
+
+    st.subheader("Current Watchlist")
+    for asset_name in list(wl.keys()):
+        details = wl[asset_name]
+        c1, c2, c3 = st.columns([3, 2, 1])
+        c1.markdown(f"**{asset_name}** — {details.get('name', asset_name)}")
+        c2.code(details["ticker"], language=None)
+        if len(wl) > 1:
+            if c3.button("🗑️ Remove", key=f"rm_{asset_name}", use_container_width=True):
+                del st.session_state.watchlist[asset_name]
+                save_watchlist_to_disk(st.session_state.watchlist)
+                st.rerun()
+        else:
+            c3.caption("Last asset")
+
+    st.markdown("---")
+    st.subheader("➕ Add an Asset")
+    a1, a2, a3 = st.columns([2, 2, 1])
+    with a1:
+        new_label = st.text_input("Display name", placeholder="e.g., Tesla")
+    with a2:
+        new_ticker = st.text_input("Yahoo Finance ticker", placeholder="e.g., TSLA, GC=F, BTC-USD")
+    with a3:
+        new_unit = st.text_input("Unit suffix", placeholder="/sh", value="/sh")
+
+    if st.button("Validate & Add to Watchlist", use_container_width=True):
+        label = new_label.strip()
+        ticker = new_ticker.strip().upper()
+        if not label or not ticker:
+            st.error("Both a display name and a ticker are required.")
+        elif label in wl:
+            st.error(f"'{label}' is already on the watchlist.")
+        elif any(d["ticker"] == ticker for d in wl.values()):
+            st.error(f"Ticker {ticker} is already tracked under another name.")
+        else:
+            with st.spinner(f"Validating {ticker} against the data feed..."):
+                quote = fetch_portal_quote(ticker)
+            if quote is None:
+                st.error(f"❌ {ticker} returned no data from Yahoo Finance. Check the symbol (futures need the =F suffix, indices need ^, crypto needs -USD).")
+            else:
+                st.session_state.watchlist[label] = {
+                    "ticker": ticker,
+                    "name": label,
+                    "unit": new_unit.strip()
+                }
+                saved = save_watchlist_to_disk(st.session_state.watchlist)
+                st.success(f"✅ {label} ({ticker}) added — last price ${quote[0]:,.2f}.")
+                if not saved:
+                    st.warning("Could not write watchlist.json to disk — the addition is active for this session only.")
+                st.rerun()
+
+    st.markdown("---")
+    st.info(
+        "**Persistence note:** additions save to watchlist.json. Locally that's permanent. "
+        "On Streamlit Cloud, the filesystem resets on every reboot/redeploy — to make an asset "
+        "permanent there (and visible to the alert bot), edit watchlist.json directly in your "
+        "GitHub repo (web editor, 30 seconds, no code)."
+    )
+
+
+# =====================================================================
 # 🧭 NAVIGATION (true multipage app)
 # =====================================================================
 pages = [
@@ -765,13 +830,14 @@ pages = [
     st.Page(page_sentiment, title="News & Sentiment", icon="📰"),
     st.Page(page_backtest, title="Backtest Lab", icon="📊"),
     st.Page(page_copilot, title="Options Co-Pilot", icon="🦅"),
+    st.Page(page_watchlist, title="Watchlist Manager", icon="⚙️"),
 ]
 
 nav = st.navigation(pages)
 
 with st.sidebar:
     st.markdown("### 🎯 Active Asset")
-    st.selectbox("Asset", list(asset_mapping.keys()), key="asset_select", label_visibility="collapsed")
+    st.selectbox("Asset", list(get_watchlist().keys()), key="asset_select", label_visibility="collapsed")
     st.caption("All analysis pages follow this selection.")
 
 nav.run()
