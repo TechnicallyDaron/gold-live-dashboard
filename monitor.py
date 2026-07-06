@@ -18,7 +18,7 @@ to stdout instead (useful for local testing: `python monitor.py`).
 import json
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 import requests
@@ -83,6 +83,14 @@ def format_alert(asset: str, unit: str, bias: dict, previous_state: str) -> str:
     return "\n".join(lines)
 
 
+def format_digest_line(asset: str, unit: str, bias: dict) -> str:
+    icon = bias["state"].split(" ")[0]
+    trend = "▲" if "BULLISH" in bias["trend"] else "▼"
+    return (f"{icon} <b>{asset}</b> ${bias['price']:,.2f}{unit} | "
+            f"Z {bias['z']:+.2f} | HTF {trend} | "
+            f"arm {bias['dist_to_arm_pct']:+.1f}% away")
+
+
 def main():
     with open(WATCHLIST_FILE) as f:
         watchlist = json.load(f)
@@ -93,11 +101,18 @@ def main():
     else:
         previous = {}
 
+    meta = previous.get("_meta", {})
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    send_digest = meta.get("last_digest") != today
+    digest_lines = []
+
     new_state = {}
     changes = 0
     failures = 0
 
     for asset, details in watchlist.items():
+        if asset.startswith("_"):
+            continue
         try:
             df = fetch_data(details["ticker"])
             bias = compute_bias(df)
@@ -114,8 +129,10 @@ def main():
         new_state[asset] = {
             "state": state,
             "price": round(bias["price"], 2),
-            "checked_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+            "checked_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
+
+        digest_lines.append(format_digest_line(asset, details.get("unit", ""), bias))
 
         prev_state = previous.get(asset, {}).get("state")
         if prev_state is None:
@@ -127,6 +144,13 @@ def main():
             send_telegram(format_alert(asset, details.get("unit", ""), bias, prev_state))
             changes += 1
 
+    if send_digest and digest_lines:
+        header = f"📊 <b>Daily Terminal Digest</b> — {datetime.now(timezone.utc).strftime('%b %d')}"
+        footer = "<i>Descriptive snapshot only — alerts fire separately on state changes.</i>"
+        if send_telegram(header + "\n\n" + "\n".join(digest_lines) + "\n\n" + footer):
+            meta["last_digest"] = today
+
+    new_state["_meta"] = meta
     with open(STATE_FILE, "w") as f:
         json.dump(new_state, f, indent=2)
 
