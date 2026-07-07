@@ -24,7 +24,7 @@ st.set_page_config(
 )
 
 # =====================================================================
-# 🎨 FABLE 5 DESIGN SYSTEM — ROW2-INIT-V1
+# 🎨 FABLE 5 DESIGN SYSTEM — DOCK-V2
 #    Ink #0B0E14 · Panel #131824 · Bullion #E8B54A · Signal #37B7C3
 #    Long #2FBF71 · Short #E4574C · Display: Space Grotesk (tabular nums)
 #    Signature: the gold rail — top nav hairline on desktop,
@@ -34,7 +34,7 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
-/* ================= ROW2-INIT-V1 · FABLE 5 DESIGN SYSTEM =================
+/* ================= DOCK-V2 · FABLE 5 DESIGN SYSTEM =================
    Layer 6: one token system, one injection, organized by layer.       */
 :root {
   --ink: #0B0E14;
@@ -465,19 +465,62 @@ div:has(> .st-key-bottomnav) {
   h1 { font-size: 1.25rem !important; }
   [data-testid="stMetricValue"] { font-size: 1.05rem !important; }
   [data-testid="stMetricLabel"] { font-size: .58rem !important; }
-  /* Native tab bar: icon over label, 44px touch targets (Apple HIG) */
+  /* ── 2-UP PHONE GRID: keep column pairs side-by-side instead of
+     stacking every metric into a full-width slab. Halves the scroll,
+     evens the composition. 3-col rows wrap 2+1. ── */
+  div[data-testid="stHorizontalBlock"] {
+    flex-wrap: wrap !important;
+    gap: .5rem !important;
+  }
+  div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+    flex: 1 1 46% !important;
+    min-width: 46% !important;
+    width: auto !important;
+  }
+  /* Raise the content into the dead space up top */
+  .block-container {
+    padding-top: .35rem !important;
+    padding-bottom: calc(6rem + env(safe-area-inset-bottom)) !important;
+  }
+  h1 { padding: .1rem 0 !important; }
+  .volt-title { margin-bottom: .35rem !important; }
+  [data-testid="stMetric"] { padding: .45rem .6rem !important; }
+  [data-testid="stAlert"] { padding: .55rem .8rem !important; }
+  /* ── DOCK v2: bigger targets, icon-forward, dimmed inactive ── */
+  .st-key-bottomnav { padding-top: .3rem !important; }
   .st-key-bottomnav a {
     flex-direction: column !important;
-    gap: 1px;
-    min-height: 44px;
-    padding: .22rem .15rem !important;
-    border-radius: 10px;
+    gap: 3px;
+    min-height: 52px;
+    padding: .28rem .05rem !important;
+    border-radius: 12px;
+    color: #7E8798 !important;
   }
-  .st-key-bottomnav a > span:first-of-type { font-size: 1.1rem; line-height: 1; }
+  .st-key-bottomnav a > span:first-of-type { font-size: 1.45rem; line-height: 1; }
   .st-key-bottomnav a p, .st-key-bottomnav a span:not(:first-of-type) {
-    font-size: .54rem !important; margin: 0 !important; line-height: 1.05;
+    font-size: .58rem !important; margin: 0 !important; line-height: 1.1;
   }
-  .st-key-bottomnav a[aria-current="page"] { box-shadow: none; }
+  .st-key-bottomnav a[aria-current="page"] {
+    box-shadow: none;
+    color: var(--bullion) !important;
+  }
+  /* Every button becomes a real thumb target */
+  .stButton > button, .stDownloadButton > button {
+    min-height: 46px !important;
+    font-size: .95rem !important;
+  }
+  /* Form inputs hit the 44px Apple floor */
+  [data-baseweb="select"] > div,
+  [data-testid="stTextInput"] input,
+  [data-testid="stNumberInput"] input,
+  [data-testid="stDateInput"] input {
+    min-height: 44px !important;
+  }
+  /* Cards and rows stay readable + tappable */
+  .asset-card { padding: 12px 12px !important; }
+  .macro-cardlet { min-width: 220px; padding: .6rem .75rem; }
+  .trade-row, .macro-row { padding: .6rem .8rem; }
+  [data-testid="stVerticalBlock"] { gap: .65rem !important; }
 }
 @media (min-width: 641px) {
   .st-key-bottomnav { display: none !important; }
@@ -1895,10 +1938,10 @@ def page_watchlist():
 PAGES = {}
 
 pages = [
-    st.Page(page_command_center, title="Global Briefing", icon="🎛️", default=True),
-    st.Page(page_bias_engine, title="Bias Engine", icon="🎯"),
-    st.Page(page_live_chart, title="Live Chart", icon="📈"),
-    st.Page(page_sentiment, title="Sentiment", icon="📰"),
+    st.Page(page_command_center, title="Briefing", icon="🎛️", default=True),
+    st.Page(page_bias_engine, title="Bias", icon="🎯"),
+    st.Page(page_live_chart, title="Chart", icon="📈"),
+    st.Page(page_sentiment, title="News", icon="📰"),
     st.Page(page_backtest, title="Backtest", icon="📊"),
     st.Page(page_copilot, title="Co-Pilot", icon="🦅"),
     st.Page(page_watchlist, title="Watchlist", icon="⚙️"),
