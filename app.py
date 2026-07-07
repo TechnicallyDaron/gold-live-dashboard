@@ -24,7 +24,7 @@ st.set_page_config(
 )
 
 # =====================================================================
-# 🎨 FABLE 5 DESIGN SYSTEM — DOCK-V2
+# 🎨 FABLE 5 DESIGN SYSTEM — PWA-DOCK-V1
 #    Ink #0B0E14 · Panel #131824 · Bullion #E8B54A · Signal #37B7C3
 #    Long #2FBF71 · Short #E4574C · Display: Space Grotesk (tabular nums)
 #    Signature: the gold rail — top nav hairline on desktop,
@@ -34,7 +34,7 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
-/* ================= DOCK-V2 · FABLE 5 DESIGN SYSTEM =================
+/* ================= PWA-DOCK-V1 · FABLE 5 DESIGN SYSTEM =================
    Layer 6: one token system, one injection, organized by layer.       */
 :root {
   --ink: #0B0E14;
@@ -369,7 +369,7 @@ hr { margin: .6rem 0 !important; }
   background: rgba(11,14,20,.95);
   backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   border-top: 1px solid rgba(232,181,74,.3);
-  padding: .25rem .3rem calc(.25rem + env(safe-area-inset-bottom)) .3rem;
+  padding: .25rem .55rem max(calc(.3rem + env(safe-area-inset-bottom)), .9rem) .55rem;
   flex-direction: row !important; flex-wrap: nowrap !important;
   gap: .15rem !important; align-items: stretch !important;
 }
@@ -524,6 +524,22 @@ div:has(> .st-key-bottomnav) {
 }
 @media (min-width: 641px) {
   .st-key-bottomnav { display: none !important; }
+}
+
+/* ── STANDALONE MODE (Add to Home Screen): no browser chrome means no
+   Safari bar propping the dock up — we clear the home-indicator and
+   status-bar zones ourselves. Fires ONLY when launched from the home
+   screen; the in-browser layout is untouched. ───────────────── */
+@media all and (display-mode: standalone) {
+  .st-key-bottomnav {
+    padding-bottom: max(calc(.35rem + env(safe-area-inset-bottom)), 1.6rem) !important;
+    padding-left: .6rem !important;
+    padding-right: .6rem !important;
+  }
+  .block-container {
+    padding-bottom: calc(7.4rem + env(safe-area-inset-bottom)) !important;
+    padding-top: max(.4rem, env(safe-area-inset-top)) !important;
+  }
 }
 </style>
 """, unsafe_allow_html=True)
