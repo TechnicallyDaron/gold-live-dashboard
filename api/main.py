@@ -23,7 +23,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import quant_core as qc
 from api import ai
+from api import analytics
 from pydantic import BaseModel
+import asyncio
+from datetime import date
 
 app = FastAPI(title="N-CORE Quant API", version="1.0.0")
 
@@ -175,6 +178,89 @@ def api_sentiment(asset: str):
         raise HTTPException(status_code=429, detail=f"Daily AI budget reached ({ai.DAILY_LIMIT} calls). Resets at midnight UTC.")
 
 
+@app.get("/api/optimized-edge/{asset}")
+def optimized_edge(asset: str):
+    try:
+        return analytics.optimized_edge(asset)
+    except Exception:
+        raise HTTPException(status_code=502, detail=f"Feed down for {asset}")
+
+
+@app.get("/api/macro-radar")
+def macro_radar(window_hours: float = 3.0):
+    return analytics.macro_radar(window_hours)
+
+
+class ValidateBody(BaseModel):
+    asset: str
+    entry: float
+    side: str | None = None
+
+
+@app.post("/api/validate")
+def api_validate(body: ValidateBody):
+    try:
+        return {**ai.validate(body.asset, body.entry, body.side), "usage": ai.usage_today()}
+    except ai.AIUnavailable:
+        r = analytics.validate_rules(body.asset, body.entry, body.side)
+        r.pop("bias", None)
+        return {**r, "analysis": None, "note": "Rules-only verdict — AI narration unavailable (no API key)."}
+    except ai.AIBudgetExceeded:
+        raise HTTPException(status_code=429, detail=f"Daily AI budget reached ({ai.DAILY_LIMIT}).")
+
+
+@app.get("/api/strategy-lab/{asset}")
+def strategy_lab(asset: str):
+    try:
+        return analytics.strategy_lab(asset)
+    except Exception:
+        raise HTTPException(status_code=502, detail=f"Feed down for {asset}")
+
+
+@app.get("/api/shield")
+def shield():
+    return analytics.theta_shield()
+
+
+@app.get("/api/exhaustion/{asset}")
+def exhaustion(asset: str):
+    ticker, name, _ = qc.resolve_ticker(asset)
+    try:
+        return {"asset": name, "ticker": ticker, **analytics.exhaustion_state(ticker)}
+    except Exception:
+        raise HTTPException(status_code=502, detail=f"Feed down for {ticker}")
+
+
+# =====================================================================
+# EXHAUSTION MONITOR — background loop, dedupe once per asset/side/day
+# =====================================================================
+_exh_sent = set()
+
+
+async def _exhaustion_loop():
+    while True:
+        try:
+            if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID and os.getenv("EXHAUSTION_ALERTS", "on") != "off":
+                for name, d in qc.load_watchlist().items():
+                    st = analytics.exhaustion_state(d["ticker"])
+                    if st.get("triggered"):
+                        k = f"{d['ticker']}:{st['side']}:{date.today().isoformat()}"
+                        if k not in _exh_sent:
+                            _exh_sent.add(k)
+                            tg_send(TELEGRAM_CHAT_ID,
+                                    f"💰 <b>TAKE PROFIT ALERT</b> 💰\n\n"
+                                    f"{name} has reached extreme overextension exhaustion at "
+                                    f"${st['price']:,.2f}. Lock in options contract premium immediately.")
+        except Exception:
+            pass
+        await asyncio.sleep(900)
+
+
+@app.on_event("startup")
+async def _start_background():
+    asyncio.create_task(_exhaustion_loop())
+
+
 # =====================================================================
 # TELEGRAM WEBHOOK — the command bot (Phase 4a: pure math, no AI spend)
 # =====================================================================
@@ -243,6 +329,9 @@ HELP_TEXT = (
     "/backtest &lt;asset&gt; \u2014 strategy viability verdicts\n"
     "/positions \u2014 Guardian-watched positions\n"
     "/macro \u2014 upcoming high-impact releases\n"
+    "/valid &lt;asset&gt; &lt;entry&gt; [side] \u2014 structural VALID/INVALID verdict\n"
+    "/edge &lt;asset&gt; \u2014 alpha optimizer scan (or NO_EDGE)\n"
+    "/lab &lt;asset&gt; \u2014 walk-forward strategy lab + per-asset assignment\n"
     "/ask &lt;asset&gt; &lt;question&gt; \u2014 AI read on the live numbers\n\n"
     "<i>Pure engine math. Statistical interpretation, not financial advice.</i>"
 )
@@ -292,6 +381,66 @@ def route_command(text: str) -> str:
         return _fmt_positions()
     if cmd == "/macro":
         return _fmt_macro()
+    if cmd == "/valid":
+        toks = arg.split()
+        if len(toks) < 2:
+            return "Usage: /valid <asset> <entry> [long|short]\nExample: /valid sofi 16.50 short"
+        try:
+            entry = float(toks[1])
+        except ValueError:
+            return "Entry must be a number. Example: /valid sofi 16.50"
+        side = toks[2].lower() if len(toks) > 2 else None
+        try:
+            v = ai.validate(toks[0], entry, side)
+            return f"🔎 <b>{v['asset']}</b> — {v['side'].upper()} @ ${entry:,.2f}\n\n{v['analysis']}"
+        except ai.AIUnavailable:
+            r = analytics.validate_rules(toks[0], entry, side)
+            return (f"🔎 <b>{r['asset']}</b> — {r['side'].upper()} @ ${entry:,.2f}\n"
+                    f"<b>STRUCTURALLY {r['verdict']}</b> — {r['reasons'][0]}")
+        except ai.AIBudgetExceeded:
+            return f"🤖 Daily AI budget reached ({ai.DAILY_LIMIT})."
+        except Exception:
+            return "❌ Validation failed — feed hiccup. Try again shortly."
+
+    if cmd == "/lab":
+        target = arg or "gold"
+        try:
+            lab = analytics.strategy_lab(target)
+        except Exception:
+            return "\u274C Feed down \u2014 try again shortly."
+        lines = [f"\U0001F9EA <b>Strategy Lab \u2014 {lab['asset']}</b> (verdicts on held-out 30%)"]
+        for r in lab["results"]:
+            t = r["test"]
+            mark = "\u2705" if r["validated"] else "\u274C"
+            pf = t["profit_factor"] if t["profit_factor"] is not None else "\u221E"
+            lines.append(f"{mark} <b>{r['name']}</b> \u2014 OOS: win {t['win_rate']*100:.0f}% | "
+                         f"PF {pf} | {t['expectancy_pct']:+.2f}%/trade | {t['signals_per_week']}/wk")
+        if lab["assigned"]:
+            lines.append(f"\n\U0001F3AF <b>ASSIGNED: {lab['assigned']['name']}</b> \u2014 "
+                         f"the one strategy for this asset.")
+        else:
+            lines.append("\n\U0001F6E1 <b>NOTHING VALIDATED</b> \u2014 no family survived "
+                         "out-of-sample. Standing aside on this asset IS the strategy.")
+        return "\n".join(lines)
+
+    if cmd == "/edge":
+        target = arg or "gold"
+        try:
+            e = analytics.optimized_edge(target)
+        except Exception:
+            return "❌ Feed down — try again shortly."
+        if e["flag"] == "NO_EDGE":
+            return (f"🛡 <b>NO_EDGE — {e['asset']}</b>\n"
+                    f"No strategy is both signaling today AND ≥{int(e['thresholds']['win_rate']*100)}% "
+                    f"win rate over 5y (≥{e['thresholds']['min_trades']} trades). "
+                    f"Regime: {e['regime']['label']}. Sitting on hands IS the position.")
+        lines = [f"⚡ <b>EDGE FOUND — {e['asset']}</b>"]
+        for c in e["candidates"]:
+            lines.append(f"• {c['name']} → {c['signal_today'].upper()} | "
+                         f"5y win {c['win_rate_5y']*100:.0f}% ({c['trades_5y']} trades) | "
+                         f"exp {c['expectancy_pct']:+.2f}%/trade")
+        return "\n".join(lines)
+
     if cmd == "/ask":
         if not arg:
             return "Usage: /ask <asset> <question>\nExample: /ask sofi is now a good entry?"

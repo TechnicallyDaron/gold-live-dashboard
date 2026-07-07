@@ -143,3 +143,36 @@ def sentiment(asset: str) -> dict:
         return parsed
     except Exception:
         return {"raw": text, "items": items, "overall": None, "impacts": []}
+
+
+def validate(asset: str, entry: float, side: str | None = None) -> dict:
+    """Rules decide, AI narrates. The verdict comes from analytics.validate_rules
+    and the model is instructed that it CANNOT be softened or overridden."""
+    from api import analytics
+    r = analytics.validate_rules(asset, entry, side)
+    snap = analytics.structure_snapshot(r["ticker"])
+    b = r["bias"]
+    candles = "\n".join(
+        f"  {c['date']}: O {c['open']} H {c['high']} L {c['low']} C {c['close']} (z {c['z']:+.2f})"
+        for c in snap["candles"])
+    payload = (
+        f"Proposed trade: {r['side'].upper()} {r['asset']} @ ${entry:,.2f} (spot ${b['price']:,.2f})\n"
+        f"Rule verdict (FINAL, computed by the engine): {r['verdict']}\n"
+        f"Rule reasons: {'; '.join(r['reasons'])}\n"
+        f"Last 3 candles:\n{candles}\n"
+        f"Z trajectory: {snap['z_trajectory']}\n"
+        f"Band width {snap['band_width_pct']}% | compression {snap['compression_ratio']} ({snap['compression_label']})\n"
+        f"Levels — Arm ${b['arm_level']:,.2f} | Invalidation ${b['invalidation']:,.2f} | Target ${b['target']:,.2f} | {b['trend']}"
+    )
+    key = f"valid:{r['ticker']}:{round(entry,2)}:{r['side']}:{round(b['price'],0)}"
+    prompt = (
+        "You are a quantitative structural analyst. Using ONLY the data below, write EXACTLY "
+        "three bullets, each starting with the bold label and <= 18 words:\n"
+        "• **Market State** — ...\n• **Momentum** — ...\n• **Structural Bands** — ...\n"
+        f"Then a final line, verbatim format: **STRUCTURALLY {r['verdict']}** — <one short clause "
+        f"from the rule reasons>. The verdict word MUST be {r['verdict']}; do not soften, hedge, or "
+        "override it.\n\n" + payload
+    )
+    text = _cached_completion(key, 600, prompt, 350)
+    return {"verdict": r["verdict"], "side": r["side"], "reasons": r["reasons"],
+            "asset": r["asset"], "entry": entry, "analysis": text}

@@ -133,17 +133,24 @@ STRATEGIES = {
                  "desc": "Band break WITH the 200 EMA trend \u2192 ride until the 20 EMA gives up"},
     "rsi": {"name": "RSI Reversion",
             "desc": "RSI(14) below 30 / above 70 with the trend filter \u2192 exit at RSI 50"},
+    "pullback": {"name": "Trend Pullback",
+                 "desc": "Shallow dip (\u22120.75\u03C3) WITH the 200 EMA trend \u2192 exit at +0.5\u03C3. Built for weekly-cadence signals."},
+    "rsi2": {"name": "Fast RSI(2)",
+             "desc": "RSI(2) washout (<10 / >90) with the trend filter \u2192 exit at 65/35. High-frequency reversion."},
 }
 
 
 def run_backtest(ticker: str, strategy: str = "meanrev"):
+    """Cached full-history run. For walk-forward segments, call
+    _run_backtest with an explicit df slice."""
     """Honest execution: signals on close \u2192 fills next open, intraday
     stops with gap handling, compounded equity. Returns (trades, stats)."""
     return _cached(f"bt:{ticker}:{strategy}", 300, lambda: _run_backtest(ticker, strategy))
 
 
-def _run_backtest(ticker: str, strategy: str):
-    df = fetch_history(ticker)
+def _run_backtest(ticker: str, strategy: str, df=None):
+    if df is None:
+        df = fetch_history(ticker)
     valid = df.dropna(subset=["Upper_Band", "Lower_Band", "Baseline", "Macro_Filter"]).copy()
 
     delta = valid["Price"].diff()
@@ -151,6 +158,11 @@ def _run_backtest(ticker: str, strategy: str):
     loss = (-delta.clip(upper=0)).ewm(alpha=1 / 14, adjust=False).mean()
     rs = gain / loss.replace(0, np.nan)
     valid["RSI"] = 100 - 100 / (1 + rs)
+    g2 = delta.clip(lower=0).ewm(alpha=1 / 2, adjust=False).mean()
+    l2 = (-delta.clip(upper=0)).ewm(alpha=1 / 2, adjust=False).mean()
+    valid["RSI2"] = 100 - 100 / (1 + g2 / l2.replace(0, np.nan))
+    sigma = (valid["Upper_Band"] - valid["Baseline"]) / 2.0
+    valid["Z"] = (valid["Price"] - valid["Baseline"]) / sigma.replace(0, np.nan)
 
     equity, equity_marks = 1.0, [1.0]
     position, entry_price, entry_date = 0, 0.0, None
@@ -179,6 +191,8 @@ def _run_backtest(ticker: str, strategy: str):
         baseline_v, upper_v = float(bar.Baseline), float(bar.Upper_Band)
         lower_v, macro_v = float(bar.Lower_Band), float(bar.Macro_Filter)
         rsi_v = None if pd.isna(bar.RSI) else float(bar.RSI)
+        rsi2_v = None if pd.isna(bar.RSI2) else float(bar.RSI2)
+        z_v = None if pd.isna(bar.Z) else float(bar.Z)
 
         if position == 0 and pending_entry != 0:
             position, entry_price, entry_date, pending_entry = pending_entry, open_, bar.Index, 0
@@ -197,12 +211,16 @@ def _run_backtest(ticker: str, strategy: str):
         if position == 1:
             if (strategy == "meanrev" and close >= baseline_v) or \
                (strategy == "breakout" and close < baseline_v) or \
-               (strategy == "rsi" and rsi_v is not None and rsi_v >= 50):
+               (strategy == "rsi" and rsi_v is not None and rsi_v >= 50) or \
+               (strategy == "pullback" and z_v is not None and z_v >= 0.5) or \
+               (strategy == "rsi2" and rsi2_v is not None and rsi2_v >= 65):
                 pending_exit_label = "Long Exit (Signal)"
         elif position == -1:
             if (strategy == "meanrev" and close <= baseline_v) or \
                (strategy == "breakout" and close > baseline_v) or \
-               (strategy == "rsi" and rsi_v is not None and rsi_v <= 50):
+               (strategy == "rsi" and rsi_v is not None and rsi_v <= 50) or \
+               (strategy == "pullback" and z_v is not None and z_v <= -0.5) or \
+               (strategy == "rsi2" and rsi2_v is not None and rsi2_v <= 35):
                 pending_exit_label = "Short Exit (Signal)"
 
         if position == 0 and pending_entry == 0:
@@ -220,6 +238,16 @@ def _run_backtest(ticker: str, strategy: str):
                 if rsi_v < 30 and close > macro_v:
                     pending_entry = 1
                 elif rsi_v > 70 and close < macro_v:
+                    pending_entry = -1
+            elif strategy == "pullback" and z_v is not None:
+                if z_v <= -0.75 and close > macro_v:
+                    pending_entry = 1
+                elif z_v >= 0.75 and close < macro_v:
+                    pending_entry = -1
+            elif strategy == "rsi2" and rsi2_v is not None:
+                if rsi2_v < 10 and close > macro_v:
+                    pending_entry = 1
+                elif rsi2_v > 90 and close < macro_v:
                     pending_entry = -1
 
     def stat_block(subset):
