@@ -1,0 +1,65 @@
+.position-card {
+  padding: 16px;
+  margin-bottom: 12px;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bottom));
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--bullion);
+}
+
+.position-card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.position-card-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.position-card-exp {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.position-card-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.position-card-row:last-of-type {
+  border-bottom: none;
+}
+
+.position-card-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.position-card-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.position-card-value--short {
+  color: var(--short);
+}
+
+.position-card-notes {
+  margin: 10px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}

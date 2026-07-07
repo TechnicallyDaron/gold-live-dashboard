@@ -1,0 +1,29 @@
+.positions-header {
+  margin-bottom: 16px;
+}
+
+.positions-title {
+  font-size: 26px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text);
+  letter-spacing: -0.3px;
+}
+
+.positions-card-skeleton {
+  height: 150px;
+  margin-bottom: 12px;
+}
+
+.positions-error {
+  color: var(--short);
+  font-size: 13px;
+  padding: 12px 0;
+}
+
+.positions-empty {
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+  padding: 48px 0;
+}
