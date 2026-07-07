@@ -4,6 +4,8 @@ import './TabBar.css'
 const TABS = [
   { to: '/', label: 'Briefing', icon: BriefingIcon, end: true },
   { to: '/bias', label: 'Bias', icon: BiasIcon },
+  { to: '/chart', label: 'Chart', icon: ChartIcon },
+  { to: '/news', label: 'News', icon: NewsIcon },
   { to: '/positions', label: 'Positions', icon: PositionsIcon },
 ]
 
@@ -22,6 +24,25 @@ function BiasIcon({ active }) {
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
       <path d="M4 17l5-6 4 3 7-9" stroke={active ? 'var(--bullion)' : 'var(--muted)'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M4 20h16" stroke={active ? 'var(--bullion)' : 'var(--muted)'} strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function ChartIcon({ active }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <path d="M5 19V10M12 19V5M19 19v-6" stroke={active ? 'var(--bullion)' : 'var(--muted)'} strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M4 20h16" stroke={active ? 'var(--bullion)' : 'var(--muted)'} strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function NewsIcon({ active }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H15l4 4v12.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19.5v-15Z"
+        stroke={active ? 'var(--bullion)' : 'var(--muted)'} strokeWidth="1.6" />
+      <path d="M9 12h6M9 16h6" stroke={active ? 'var(--bullion)' : 'var(--muted)'} strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   )
 }

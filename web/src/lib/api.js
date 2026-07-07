@@ -32,6 +32,8 @@ export const api = {
     request(`/api/backtest/${encodeURIComponent(asset)}?strategy=${strategy}`),
   macro: () => request('/api/macro'),
   news: (asset) => request(`/api/news/${encodeURIComponent(asset)}`),
+  tape: () => request('/api/tape'),
+  history: (asset, days) => request(`/api/history/${encodeURIComponent(asset)}?days=${days}`),
 }
 
 export { ApiError }

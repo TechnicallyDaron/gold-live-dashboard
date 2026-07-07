@@ -1,0 +1,77 @@
+.ticker-tape-skeleton {
+  height: 36px;
+  margin: calc(-1 * (env(safe-area-inset-top) + 16px)) -16px 16px -16px;
+}
+
+.ticker-tape {
+  overflow: hidden;
+  margin: calc(-1 * (env(safe-area-inset-top) + 16px)) -16px 16px -16px;
+  padding-top: calc(env(safe-area-inset-top) + 9px);
+  padding-bottom: 9px;
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bottom));
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.tape-track {
+  display: inline-flex;
+  width: max-content;
+  animation: tape-scroll 22s linear infinite;
+}
+
+.tape-track--paused {
+  animation-play-state: paused;
+}
+
+@keyframes tape-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.tape-group {
+  display: inline-flex;
+  align-items: center;
+}
+
+.tape-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.tape-symbol {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.tape-price {
+  color: var(--muted);
+}
+
+.tape-pct {
+  font-weight: 600;
+}
+
+.tape-pct--up {
+  color: var(--long);
+}
+
+.tape-pct--down {
+  color: var(--short);
+}
+
+.tape-dash {
+  color: var(--muted);
+  opacity: 0.5;
+}
+
+.tape-sep {
+  color: var(--volt);
+  font-size: 11px;
+}

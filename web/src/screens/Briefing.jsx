@@ -1,24 +1,30 @@
 import { useWatchlist } from '../lib/useWatchlist.js'
 import { useWatchlistData } from '../lib/useWatchlistData.js'
+import { useMacro } from '../lib/useMacro.js'
 import HealthDot from '../components/HealthDot.jsx'
+import TickerTape from '../components/TickerTape.jsx'
 import MacroBanner from '../components/MacroBanner.jsx'
+import MacroWeekTrack from '../components/MacroWeekTrack.jsx'
 import WatchlistCard from '../components/WatchlistCard.jsx'
 import './Briefing.css'
 
 export default function Briefing() {
   const { watchlist, error: watchlistError } = useWatchlist()
+  const { data: macroEvents, loading: macroLoading } = useMacro()
 
   const names = watchlist ? Object.keys(watchlist) : []
   const { data: byAsset, loading: dataLoading } = useWatchlistData(names)
 
   return (
     <div className="briefing">
+      <TickerTape />
+
       <header className="briefing-header">
         <h1 className="briefing-title">Briefing</h1>
         <HealthDot />
       </header>
 
-      <MacroBanner />
+      <MacroBanner events={macroEvents} loading={macroLoading} />
 
       <section className="briefing-watchlist">
         {watchlistError && (
@@ -37,6 +43,8 @@ export default function Briefing() {
             />
           ))}
       </section>
+
+      <MacroWeekTrack events={macroEvents} loading={macroLoading} />
     </div>
   )
 }

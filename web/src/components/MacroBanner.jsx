@@ -1,15 +1,11 @@
-import { api } from '../lib/api.js'
-import { usePolling } from '../lib/usePolling.js'
 import './MacroBanner.css'
 
-export default function MacroBanner() {
-  const { data, loading } = usePolling(() => api.macro(), [], 60000)
-
-  if (loading) {
+export default function MacroBanner({ events, loading }) {
+  if (loading && !events) {
     return <div className="skeleton macro-banner-skeleton" />
   }
 
-  const next = (data || []).find((e) => e.upcoming)
+  const next = (events || []).find((e) => e.upcoming)
   if (!next) return null
 
   return (
