@@ -6,7 +6,7 @@ on:
     # Note: GitHub cron is UTC and does NOT adjust for daylight saving —
     # during EST (winter) this window shifts one hour earlier in NY terms.
     # Gold futures trade nearly 24/5; widen the hours if you want overnight coverage.
-    - cron: "*/30 13-21 * * 1-5"
+    - cron: "7,37 13-21 * * 1-5"
   workflow_dispatch: {}   # manual "Run workflow" button for testing
 
 permissions:
