@@ -2,10 +2,10 @@ import { useState } from 'react'
 import { useTape } from '../lib/useTape.js'
 import './TickerTape.css'
 
-function TapeItem({ item }) {
+function TapeItem({ item, onSelect }) {
   const q = item.quote
   return (
-    <span className="tape-item">
+    <button type="button" className="tape-item" onClick={() => onSelect(item)}>
       <span className="tape-symbol">{item.symbol}</span>
       {q ? (
         <>
@@ -22,11 +22,11 @@ function TapeItem({ item }) {
       ) : (
         <span className="tape-dash">—</span>
       )}
-    </span>
+    </button>
   )
 }
 
-export default function TickerTape() {
+export default function TickerTape({ onSelect }) {
   const { data, loading } = useTape()
   const [paused, setPaused] = useState(false)
 
@@ -39,7 +39,7 @@ export default function TickerTape() {
     <>
       {data.map((item, i) => (
         <span className="tape-group" key={`${keyPrefix}-${item.symbol}`}>
-          <TapeItem item={item} />
+          <TapeItem item={item} onSelect={onSelect} />
           {i < data.length - 1 && <span className="tape-sep">⚡</span>}
         </span>
       ))}

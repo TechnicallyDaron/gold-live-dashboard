@@ -1,0 +1,137 @@
+.ql-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.55);
+  animation: ql-fade-in 0.15s ease-out;
+}
+
+@keyframes ql-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.ql-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 75vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bottom));
+  border-top: 1px solid var(--border);
+  border-radius: 20px 20px 0 0;
+  padding: 10px 20px calc(env(safe-area-inset-bottom) + 20px);
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.4);
+  animation: ql-slide-up 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  touch-action: none;
+}
+
+@keyframes ql-slide-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.ql-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border);
+  margin: 4px auto 16px;
+  flex-shrink: 0;
+}
+
+.ql-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  margin-bottom: 20px;
+}
+
+.ql-symbol {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.ql-quote {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.ql-price {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.ql-pct {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ql-pct--up {
+  color: var(--long);
+}
+
+.ql-pct--down {
+  color: var(--short);
+}
+
+.ql-error {
+  color: var(--short);
+  font-size: 13px;
+}
+
+.ql-skeleton {
+  height: 120px;
+}
+
+.ql-plain {
+  flex: 1;
+  min-height: 0;
+}
+
+.ql-plain-emoji {
+  font-size: 28px;
+}
+
+.ql-plain-headline {
+  margin: 10px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.ql-plain-action {
+  margin: 12px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.ql-full-link {
+  flex-shrink: 0;
+  width: 100%;
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--bullion);
+  background: rgba(232, 181, 74, 0.1);
+  color: var(--bullion);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
