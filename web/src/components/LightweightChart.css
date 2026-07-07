@@ -1,0 +1,38 @@
+.lw-chart-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bottom));
+  border: 1px solid var(--border);
+}
+
+.lw-chart-container {
+  position: absolute;
+  inset: 0;
+}
+
+.lw-chart-tooltip {
+  position: absolute;
+  pointer-events: none;
+  z-index: 5;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(11, 14, 20, 0.92);
+  border: 1px solid var(--border);
+  min-width: 120px;
+}
+
+.lw-chart-tooltip-date {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.lw-chart-tooltip-row {
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}

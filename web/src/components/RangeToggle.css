@@ -1,0 +1,25 @@
+.range-toggle {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.range-btn {
+  flex: 1;
+  padding: 8px 0;
+  min-height: 36px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--panel-top);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.range-btn--active {
+  background: var(--bullion);
+  border-color: var(--bullion);
+  color: var(--ink);
+}
