@@ -1,0 +1,232 @@
+.fb-section {
+  margin-bottom: 16px;
+}
+
+.fb-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bottom));
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.fb-toggle-chevron {
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+
+.fb-toggle-chevron--open {
+  transform: rotate(180deg);
+}
+
+.fb-body {
+  margin-top: 10px;
+}
+
+.fb-strategy-pills {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin-bottom: 12px;
+}
+
+.fb-pill {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel-top);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.fb-pill--active {
+  background: var(--bullion);
+  border-color: var(--bullion);
+  color: var(--ink);
+}
+
+.fb-skeleton {
+  height: 220px;
+}
+
+.fb-feed-down {
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--short);
+  color: var(--short);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.fb-returns-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.fb-return-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bottom));
+  border: 1px solid var(--border);
+}
+
+.fb-return-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.2px;
+  text-transform: uppercase;
+}
+
+.fb-return-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.fb-return-value--short {
+  color: var(--short);
+}
+
+.fb-dir-table {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 12px;
+  margin-bottom: 16px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bottom));
+  border: 1px solid var(--border);
+}
+
+.fb-dir-row {
+  display: grid;
+  grid-template-columns: 0.7fr 1fr 0.9fr 0.8fr 0.8fr;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.fb-dir-row:last-child {
+  border-bottom: none;
+}
+
+.fb-dir-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.fb-dir-value {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+}
+
+.fb-dir-value--long {
+  color: var(--long);
+}
+
+.fb-dir-value--short {
+  color: var(--short);
+}
+
+.fb-trades-title {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.fb-trades-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fb-trade {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bottom));
+  border: 1px solid var(--border);
+  border-left: 3px solid transparent;
+}
+
+.fb-trade--win {
+  border-left-color: var(--long);
+}
+
+.fb-trade--loss {
+  border-left-color: var(--short);
+}
+
+.fb-trade-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fb-trade-type {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.3px;
+}
+
+.fb-trade-dates {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fb-trade-badge {
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.fb-trade-badge--win {
+  color: var(--long);
+}
+
+.fb-trade-badge--loss {
+  color: var(--short);
+}
+
+.fb-trades-empty {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+  padding: 16px 0;
+  margin: 0;
+}

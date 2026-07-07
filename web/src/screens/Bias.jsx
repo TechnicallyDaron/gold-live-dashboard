@@ -8,6 +8,7 @@ import VerdictBanner from '../components/VerdictBanner.jsx'
 import MetricsGrid from '../components/MetricsGrid.jsx'
 import ActionLevels from '../components/ActionLevels.jsx'
 import BacktestStrip from '../components/BacktestStrip.jsx'
+import FullBacktestSection from '../components/FullBacktestSection.jsx'
 import './Bias.css'
 
 export default function Bias() {
@@ -66,6 +67,7 @@ export default function Bias() {
           <MetricsGrid bias={bias} unit={bias.unit} />
           <ActionLevels bias={bias} unit={bias.unit} />
           <BacktestStrip results={backtestResults} loading={backtestLoading} />
+          <FullBacktestSection results={backtestResults} loading={backtestLoading} />
         </>
       )}
     </div>
