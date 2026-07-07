@@ -1,18 +1,18 @@
 {
   "Gold": {
     "state": "\u26aa NO TRADE",
-    "price": 4155.9,
-    "checked_at": "2026-07-07T15:49:25Z"
+    "price": 4153.4,
+    "checked_at": "2026-07-07T16:00:37Z"
   },
   "S&P 500": {
     "state": "\u26aa NO TRADE",
-    "price": 7496.44,
-    "checked_at": "2026-07-07T15:49:25Z"
+    "price": 7500.5,
+    "checked_at": "2026-07-07T16:00:37Z"
   },
   "SOFI": {
     "state": "\u26aa NO TRADE",
-    "price": 17.9,
-    "checked_at": "2026-07-07T15:49:25Z"
+    "price": 18.0,
+    "checked_at": "2026-07-07T16:00:37Z"
   },
   "_meta": {
     "last_digest": "2026-07-07",
