@@ -9,6 +9,7 @@ import MacroHijackBanner from '../components/MacroHijackBanner.jsx'
 import MacroWeekTrack from '../components/MacroWeekTrack.jsx'
 import WatchlistGrid from '../components/WatchlistGrid.jsx'
 import QuickLookModal from '../components/QuickLookModal.jsx'
+import MicroChart from '../components/MicroChart.jsx'
 import './Briefing.css'
 
 export default function Briefing() {
@@ -38,6 +39,8 @@ export default function Briefing() {
       {watchlistError && (
         <div className="briefing-error">Could not load watchlist. Pull to retry.</div>
       )}
+
+      <MicroChart names={names} />
 
       <WatchlistGrid
         watchlist={watchlist || {}}
