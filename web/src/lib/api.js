@@ -7,8 +7,8 @@ class ApiError extends Error {
   }
 }
 
-async function request(path) {
-  const res = await fetch(`${BASE_URL}${path}`)
+async function request(path, options) {
+  const res = await fetch(`${BASE_URL}${path}`, options)
   if (!res.ok) {
     let detail = res.statusText
     try {
@@ -34,6 +34,13 @@ export const api = {
   news: (asset) => request(`/api/news/${encodeURIComponent(asset)}`),
   tape: () => request('/api/tape'),
   history: (asset, days) => request(`/api/history/${encodeURIComponent(asset)}?days=${days}`),
+  ask: (asset, question) =>
+    request('/api/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ asset, question }),
+    }),
+  sentiment: (asset) => request(`/api/sentiment/${encodeURIComponent(asset)}`),
 }
 
 export { ApiError }

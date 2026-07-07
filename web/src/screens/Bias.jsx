@@ -9,6 +9,7 @@ import MetricsGrid from '../components/MetricsGrid.jsx'
 import ActionLevels from '../components/ActionLevels.jsx'
 import BacktestStrip from '../components/BacktestStrip.jsx'
 import FullBacktestSection from '../components/FullBacktestSection.jsx'
+import QuickPrompts from '../components/QuickPrompts.jsx'
 import './Bias.css'
 
 export default function Bias() {
@@ -68,6 +69,7 @@ export default function Bias() {
           <ActionLevels bias={bias} unit={bias.unit} />
           <BacktestStrip results={backtestResults} loading={backtestLoading} />
           <FullBacktestSection results={backtestResults} loading={backtestLoading} />
+          <QuickPrompts key={selected} asset={selected} />
         </>
       )}
     </div>

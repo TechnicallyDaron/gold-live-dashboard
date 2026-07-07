@@ -1,0 +1,117 @@
+.quick-prompts {
+  margin-bottom: 16px;
+}
+
+.qp-title {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.qp-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.qp-pill {
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel-top);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.qp-pill:active {
+  border-color: var(--volt);
+}
+
+.qp-input-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.qp-input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--panel-top);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.qp-input::placeholder {
+  color: var(--muted);
+}
+
+.qp-input:focus {
+  outline: none;
+  border-color: var(--volt);
+}
+
+.qp-ask-btn {
+  flex-shrink: 0;
+  width: 44px;
+  min-height: 44px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--volt);
+  background: rgba(0, 229, 255, 0.1);
+  color: var(--volt);
+  font-size: 18px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.qp-ask-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.qp-answer-skeleton {
+  height: 96px;
+}
+
+.qp-error-notice {
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--watch);
+  background: rgba(226, 169, 59, 0.08);
+  color: var(--watch);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.qp-answer-card {
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bottom));
+  border: 1px solid var(--volt);
+  box-shadow: 0 0 16px rgba(0, 229, 255, 0.15);
+}
+
+.qp-answer-text {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.qp-usage {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+}
