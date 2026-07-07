@@ -9,23 +9,14 @@ export default function MacroWeekTrack({ events, loading }) {
   const ordered = [...events].sort((a, b) => (b.upcoming ? 1 : 0) - (a.upcoming ? 1 : 0))
 
   return (
-    <section className="macro-week">
-      <span className="macro-week-title">Macro Week</span>
-      <div className="macro-week-track">
-        {ordered.map((e, i) => (
-          <div key={i} className="macro-cardlet">
-            <div className="macro-cardlet-top">
-              <span className="macro-cardlet-currency">{e.currency}</span>
-              {e.upcoming && <span className="macro-cardlet-chip">Upcoming</span>}
-            </div>
-            <span className="macro-cardlet-time">{e.time_et} ET</span>
-            <span className="macro-cardlet-event">{e.event}</span>
-            <span className="macro-cardlet-fp">
-              F {e.forecast} · P {e.previous}
-            </span>
-          </div>
-        ))}
-      </div>
-    </section>
+    <div className="macro-week">
+      {ordered.map((e, i) => (
+        <div key={i} className={e.upcoming ? 'macro-chip macro-chip--upcoming' : 'macro-chip'}>
+          <span className="macro-chip-currency">{e.currency}</span>
+          <span className="macro-chip-event">{e.event}</span>
+          <span className="macro-chip-time">{e.time_et}</span>
+        </div>
+      ))}
+    </div>
   )
 }

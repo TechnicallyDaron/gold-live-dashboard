@@ -1,0 +1,29 @@
+.hijack-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+  margin: calc(-1 * (env(safe-area-inset-top) + 16px)) -16px 10px -16px;
+  padding: calc(env(safe-area-inset-top) + 9px) 16px 9px 16px;
+  background: rgba(226, 169, 59, 0.12);
+  border-bottom: 1px solid var(--watch);
+  white-space: nowrap;
+}
+
+.hijack-banner-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.hijack-banner-text {
+  font-size: 12px;
+  color: var(--watch);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hijack-banner-text strong {
+  color: var(--text);
+}

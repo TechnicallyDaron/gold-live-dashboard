@@ -1,20 +1,30 @@
+.briefing {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .briefing-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  flex-shrink: 0;
+  margin-bottom: 10px;
 }
 
 .briefing-title {
-  font-size: 26px;
+  font-size: 18px;
   font-weight: 700;
   margin: 0;
   color: var(--text);
-  letter-spacing: -0.3px;
+  letter-spacing: -0.2px;
 }
 
 .briefing-error {
+  flex-shrink: 0;
   color: var(--short);
-  font-size: 13px;
-  padding: 12px 0;
+  font-size: 12px;
+  padding: 4px 0 8px;
 }

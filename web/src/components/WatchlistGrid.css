@@ -1,0 +1,53 @@
+.watchlist-grid-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.wg-inner {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.wg-scroll {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  width: 100%;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+
+.wg-page {
+  flex-shrink: 0;
+  align-self: stretch;
+  scroll-snap-align: start;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 12px;
+}
+
+.wg-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-top: 10px;
+}
+
+.wg-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.wg-dot--active {
+  background: var(--bullion);
+}

@@ -22,6 +22,14 @@ async function request(path, options) {
   return res.json()
 }
 
+function postJSON(path, body) {
+  return request(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
 export const api = {
   health: () => request('/api/health'),
   watchlist: () => request('/api/watchlist'),
@@ -34,13 +42,9 @@ export const api = {
   news: (asset) => request(`/api/news/${encodeURIComponent(asset)}`),
   tape: () => request('/api/tape'),
   history: (asset, days) => request(`/api/history/${encodeURIComponent(asset)}?days=${days}`),
-  ask: (asset, question) =>
-    request('/api/ask', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ asset, question }),
-    }),
+  ask: (asset, question) => postJSON('/api/ask', { asset, question }),
   sentiment: (asset) => request(`/api/sentiment/${encodeURIComponent(asset)}`),
+  macroRadar: () => request('/api/macro-radar'),
 }
 
 export { ApiError }
