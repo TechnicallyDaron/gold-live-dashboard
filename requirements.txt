@@ -10,3 +10,4 @@ plotly
 anthropic
 fastapi
 uvicorn
+pywebpush

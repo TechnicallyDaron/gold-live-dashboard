@@ -386,3 +386,92 @@ def strategy_lab(asset: str) -> dict:
         "note": ("Verdicts are rendered on the held-out final 30% of history only \u2014 "
                  "a strategy that only wins on the data it was tuned on is a mirage."),
     }
+
+
+# ── 7) PLAYBOOK + SCAN ───────────────────────────────────────
+def load_playbook() -> dict:
+    """assignments keyed UPPER by display name AND ticker for easy lookup."""
+    try:
+        with open("playbook.json") as f:
+            pb = json.load(f)
+        out = {}
+        for key, a in (pb.get("assignments") or {}).items():
+            ticker, name, _ = qc.resolve_ticker(key)
+            rec = {"key": key, "strategy": a.get("strategy"),
+                   "strategy_name": a.get("name"), "assigned_at": a.get("assigned_at")}
+            out[key.upper()] = rec
+            out[ticker.upper()] = rec
+        return out
+    except Exception:
+        return {}
+
+
+def assignment_for(asset: str):
+    ticker, name, _ = qc.resolve_ticker(asset)
+    pb = load_playbook()
+    return pb.get(name.upper()) or pb.get(ticker.upper()) or pb.get(asset.upper())
+
+
+def scan_playbook() -> list:
+    """The Monday-morning command: which ASSIGNED strategies are firing
+    on the current close? Returns only live hits."""
+    hits, seen = [], set()
+    pb = load_playbook()
+    for rec in pb.values():
+        if rec["key"] in seen:
+            continue
+        seen.add(rec["key"])
+        try:
+            ticker, name, unit = qc.resolve_ticker(rec["key"])
+            side = _signals_today(ticker).get(rec["strategy"])
+            if side:
+                q = qc.get_quote(ticker) or {}
+                hits.append({"asset": name, "ticker": ticker,
+                             "strategy": rec["strategy"],
+                             "strategy_name": rec["strategy_name"],
+                             "side": side, "price": q.get("price")})
+        except Exception:
+            continue
+    return hits
+
+
+import json  # (idempotent; used above)
+
+
+# ── 8) PLAIN-HONEST TRANSLATOR ───────────────────────────────
+#     Rubber-band metaphors: yes. Jargon: no. Promises: NEVER —
+#     history is phrased as history, not prediction.
+STRATEGY_PLAIN = {
+    "meanrev": "buy-the-dip / fade-the-spike at extreme stretch",
+    "breakout": "ride the breakout with the bigger trend",
+    "rsi": "buy washouts / fade blowoffs (momentum gauge)",
+    "pullback": "buy shallow dips inside an uptrend",
+    "rsi2": "fast snap-back after a sharp washout",
+}
+
+
+def plain_state(b: dict):
+    """(emoji, headline, action_line) in everyday language, numbers kept."""
+    state = b.get("state", "")
+    if "LONG-REVERSION ARMED" in state:
+        return ("🟢",
+                "Buy-the-dip setup is LIVE — price is stretched unusually far "
+                "below its average while the bigger trend still points up.",
+                f"Zone: near ${b['arm_level']:,.2f} · Wrong if it closes past "
+                f"${b['invalidation']:,.2f} · Target back around ${b['target']:,.2f}")
+    if "SHORT-REVERSION ARMED" in state:
+        return ("🔴",
+                "Fade-the-spike setup is LIVE — price is stretched unusually far "
+                "above its average while the bigger trend points down.",
+                f"Zone: near ${b['arm_level']:,.2f} · Wrong if it closes past "
+                f"${b['invalidation']:,.2f} · Target back around ${b['target']:,.2f}")
+    if "WATCH" in state:
+        return ("👀",
+                "Getting interesting — price is drifting toward the edge of its "
+                "normal range. Not a setup yet; worth watching.",
+                f"A setup would arm near ${b['arm_level']:,.2f}")
+    return ("😴",
+            "No setup — price is inside its normal range. Nothing statistically "
+            "interesting here. Waiting IS the move.",
+            f"Nearest interesting level: ${b['arm_level']:,.2f} "
+            f"({b['dist_to_arm_pct']:+.1f}% away)")

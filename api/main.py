@@ -21,6 +21,10 @@ import requests
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+import json as _json
+import time as _time
+from collections import deque
+
 import quant_core as qc
 from api import ai
 from api import analytics
@@ -38,6 +42,56 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"],
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 TELEGRAM_WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET")
+AGENT_INTERVAL = int(os.getenv("AGENT_INTERVAL", "1200"))   # seconds; >=900 respects feed limits
+
+# ── Notification queue (Volt Bell) + web-push subscriptions ──
+NOTIFICATIONS = deque(maxlen=50)
+PUSH_SUBS_FILE = "push_subs.json"
+
+
+def notify(kind: str, title: str, body: str):
+    evt = {"ts": int(_time.time()), "kind": kind, "title": title, "body": body}
+    NOTIFICATIONS.appendleft(evt)
+    _web_push_all(evt)
+    return evt
+
+
+def _load_subs():
+    try:
+        with open(PUSH_SUBS_FILE) as f:
+            return _json.load(f)
+    except Exception:
+        return []
+
+
+def _web_push_all(evt):
+    """Native lock-screen pushes. Requires VAPID_PRIVATE_KEY +
+    VAPID_CLAIMS_EMAIL env; silently no-ops when unconfigured."""
+    key = os.getenv("VAPID_PRIVATE_KEY")
+    email = os.getenv("VAPID_CLAIMS_EMAIL")
+    subs = _load_subs()
+    if not (key and email and subs):
+        return
+    try:
+        from pywebpush import webpush
+    except Exception:
+        return
+    alive = []
+    for sub in subs:
+        try:
+            webpush(subscription_info=sub,
+                    data=_json.dumps({"title": evt["title"], "body": evt["body"]}),
+                    vapid_private_key=key,
+                    vapid_claims={"sub": f"mailto:{email}"})
+            alive.append(sub)
+        except Exception:
+            continue   # dead subscription — pruned
+    if len(alive) != len(subs):
+        try:
+            with open(PUSH_SUBS_FILE, "w") as f:
+                _json.dump(alive, f)
+        except Exception:
+            pass
 
 
 # =====================================================================
@@ -82,6 +136,21 @@ def bias(asset: str):
     b["asset"] = name
     b["ticker"] = ticker
     b["unit"] = unit
+    a = analytics.assignment_for(asset)
+    if a:
+        side = None
+        try:
+            side = analytics._signals_today(ticker).get(a["strategy"])
+        except Exception:
+            pass
+        b["assigned_strategy"] = {"strategy": a["strategy"], "name": a["strategy_name"],
+                                  "assigned_at": a.get("assigned_at")}
+        b["signaling_today"] = bool(side)
+        b["signal_side"] = side
+    else:
+        b["assigned_strategy"] = None
+        b["signaling_today"] = False
+        b["signal_side"] = None
     return b
 
 
@@ -217,6 +286,98 @@ def strategy_lab(asset: str):
         raise HTTPException(status_code=502, detail=f"Feed down for {asset}")
 
 
+PERSISTENCE_WARNING = ("Saved to the live service. NOTE: Railway's filesystem resets on "
+                       "every redeploy — commit important changes to GitHub, or wait for "
+                       "the Supabase persistence phase.")
+
+
+class WatchBody(BaseModel):
+    name: str
+    ticker: str
+    unit: str = "/sh"
+
+
+@app.post("/api/watchlist")
+def add_watchlist(body: WatchBody):
+    wl = qc.load_watchlist()
+    if body.name in wl:
+        raise HTTPException(status_code=409, detail=f"'{body.name}' already tracked.")
+    if qc.get_quote(body.ticker.upper()) is None:
+        raise HTTPException(status_code=422, detail=f"{body.ticker.upper()} returned no data from the feed.")
+    wl[body.name] = {"ticker": body.ticker.upper(), "name": body.name, "unit": body.unit}
+    with open("watchlist.json", "w") as f:
+        _json.dump(wl, f, indent=2)
+    return {"watchlist": wl, "persistence_warning": PERSISTENCE_WARNING}
+
+
+@app.delete("/api/watchlist/{name}")
+def remove_watchlist(name: str):
+    wl = qc.load_watchlist()
+    match = next((k for k in wl if k.lower() == name.lower()), None)
+    if not match:
+        raise HTTPException(status_code=404, detail=f"'{name}' not on the watchlist.")
+    if len(wl) <= 1:
+        raise HTTPException(status_code=409, detail="Cannot remove the last asset.")
+    del wl[match]
+    with open("watchlist.json", "w") as f:
+        _json.dump(wl, f, indent=2)
+    return {"watchlist": wl, "persistence_warning": PERSISTENCE_WARNING}
+
+
+class PositionBody(BaseModel):
+    asset: str
+    strike: float
+    contract_type: str          # "call" | "put"
+    entry_premium: float
+    entry_date: str             # YYYY-MM-DD
+    expiration: str             # YYYY-MM-DD
+    premium_stop: float | None = None
+    time_stop: str | None = None
+    invalidation_above: float | None = None
+    invalidation_below: float | None = None
+
+
+@app.post("/api/positions")
+def add_position(body: PositionBody):
+    if body.contract_type.lower() not in ("call", "put"):
+        raise HTTPException(status_code=422, detail="contract_type must be 'call' or 'put'.")
+    pos = qc.load_positions()
+    pid = f"{body.asset.lower()}_{body.contract_type.lower()}_{int(_time.time())}"
+    rec = {k: v for k, v in body.dict().items() if v is not None}
+    rec["asset"] = body.asset.upper()
+    rec["type"] = rec.pop("contract_type").lower()
+    pos[pid] = rec
+    with open("positions.json", "w") as f:
+        _json.dump(pos, f, indent=2)
+    return {"id": pid, "position": rec, "shield_armed": bool(body.entry_date),
+            "persistence_warning": PERSISTENCE_WARNING}
+
+
+@app.get("/api/scan")
+def api_scan():
+    return {"hits": analytics.scan_playbook(),
+            "playbook_size": len({r["key"] for r in analytics.load_playbook().values()})}
+
+
+@app.get("/api/notifications")
+def api_notifications(since: int = 0):
+    return [e for e in NOTIFICATIONS if e["ts"] > since]
+
+
+@app.post("/api/push/subscribe")
+async def push_subscribe(request: Request):
+    sub = await request.json()
+    if not sub.get("endpoint"):
+        raise HTTPException(status_code=422, detail="Not a push subscription.")
+    subs = _load_subs()
+    if not any(s.get("endpoint") == sub["endpoint"] for s in subs):
+        subs.append(sub)
+        with open(PUSH_SUBS_FILE, "w") as f:
+            _json.dump(subs, f)
+    return {"ok": True, "subscriptions": len(subs),
+            "push_configured": bool(os.getenv("VAPID_PRIVATE_KEY"))}
+
+
 @app.get("/api/shield")
 def shield():
     return analytics.theta_shield()
@@ -232,47 +393,129 @@ def exhaustion(asset: str):
 
 
 # =====================================================================
-# EXHAUSTION MONITOR — background loop, dedupe once per asset/side/day
+# THE AGENT WORKER — continuous automation, both channels, deduped.
+#   Cycle: playbook scan → exhaustion check → macro proximity.
+#   Interval floor 900s: faster polling risks the price feed banning
+#   us, which kills everything. Plain-honest language on every alert.
 # =====================================================================
-_exh_sent = set()
+_agent_sent = set()
 
 
-async def _exhaustion_loop():
+def _agent_pass():
+    """One full cycle. Extracted from the loop so tests can drive it."""
+    today = date.today().isoformat()
+
+    # 1) Playbook: assigned strategies firing on the live close
+    for h in analytics.scan_playbook():
+        k = f"pb:{h['ticker']}:{h['side']}:{today}"
+        if k in _agent_sent:
+            continue
+        _agent_sent.add(k)
+        verb = "buy-the-dip" if h["side"] == "long" else "fade-the-spike"
+        px = f" at ${h['price']:,.2f}" if h.get("price") else ""
+        body = (f"{h['asset']}{px}: your validated {h['strategy_name']} strategy "
+                f"just fired a {verb} setup. This is the exact pattern that made "
+                f"money in walk-forward testing \u2014 check the app for levels.")
+        tg_send(TELEGRAM_CHAT_ID, f"\U0001F3AF <b>PLAYBOOK SETUP LIVE</b>\n\n{body}")
+        notify("playbook", f"\U0001F3AF {h['asset']} setup live", body)
+
+    # 2) Exhaustion: spent thrusts at extremes
+    for name, d in qc.load_watchlist().items():
+        try:
+            st = analytics.exhaustion_state(d["ticker"])
+        except Exception:
+            continue
+        if st.get("triggered"):
+            k = f"ex:{d['ticker']}:{st['side']}:{today}"
+            if k in _agent_sent:
+                continue
+            _agent_sent.add(k)
+            tg_send(TELEGRAM_CHAT_ID,
+                    f"\U0001F4B0 <b>TAKE PROFIT ALERT</b> \U0001F4B0\n\n"
+                    f"{name} has reached extreme overextension exhaustion at "
+                    f"${st['price']:,.2f}. Lock in options contract premium immediately.")
+            notify("exhaustion", f"\U0001F4B0 {name} looks exhausted",
+                   f"The move in {name} is losing steam at ${st['price']:,.2f} after an "
+                   f"extreme stretch \u2014 historically where thrusts stall. If you're "
+                   f"in profit, consider locking some in.")
+
+    # 3) Macro proximity: big USD news inside the 3-hour window
+    try:
+        rad = analytics.macro_radar()
+        if rad.get("hijack") and rad.get("nearest"):
+            ev = rad["nearest"]
+            k = f"mr:{ev['event']}:{today}"
+            if k not in _agent_sent:
+                _agent_sent.add(k)
+                body = (f"{ev['event']} hits in about {ev['minutes_remaining']} minutes. "
+                        f"Big news like this can shake every asset on the board \u2014 "
+                        f"setups armed into it carry extra gap risk.")
+                tg_send(TELEGRAM_CHAT_ID, f"\u26A0\uFE0F <b>HEADS UP \u2014 BIG NEWS SOON</b>\n\n{body}")
+                notify("macro", f"\u26A0\uFE0F {ev['event']} in {ev['minutes_remaining']}m", body)
+    except Exception:
+        pass
+
+
+async def _agent_loop():
     while True:
         try:
-            if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID and os.getenv("EXHAUSTION_ALERTS", "on") != "off":
-                for name, d in qc.load_watchlist().items():
-                    st = analytics.exhaustion_state(d["ticker"])
-                    if st.get("triggered"):
-                        k = f"{d['ticker']}:{st['side']}:{date.today().isoformat()}"
-                        if k not in _exh_sent:
-                            _exh_sent.add(k)
-                            tg_send(TELEGRAM_CHAT_ID,
-                                    f"💰 <b>TAKE PROFIT ALERT</b> 💰\n\n"
-                                    f"{name} has reached extreme overextension exhaustion at "
-                                    f"${st['price']:,.2f}. Lock in options contract premium immediately.")
+            if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID and os.getenv("AGENT", "on") != "off":
+                _agent_pass()
         except Exception:
             pass
-        await asyncio.sleep(900)
+        await asyncio.sleep(max(AGENT_INTERVAL, 900))
 
 
 @app.on_event("startup")
 async def _start_background():
-    asyncio.create_task(_exhaustion_loop())
+    asyncio.create_task(_agent_loop())
 
 
 # =====================================================================
+# TELEGRAM WEBHOOK# =====================================================================
 # TELEGRAM WEBHOOK — the command bot (Phase 4a: pure math, no AI spend)
 # =====================================================================
-def tg_send(chat_id, text: str) -> bool:
+MAIN_KEYBOARD = {
+    "keyboard": [["\U0001F9EA Strategy Lab", "\U0001F50D Scan Playbook"],
+                 ["\U0001F4F1 Status", "\U0001F6E1 Positions"],
+                 ["\U0001F4D6 Playbook", "\u2753 Help"]],
+    "resize_keyboard": True, "is_persistent": True,
+}
+
+
+def asset_inline_keyboard(action: str):
+    """Inline grid of watchlist assets; a tap fires '{action}|{name}'."""
+    rows, row = [], []
+    for n in qc.load_watchlist().keys():
+        row.append({"text": n, "callback_data": f"{action}|{n}"[:64]})
+        if len(row) == 3:
+            rows.append(row); row = []
+    if row:
+        rows.append(row)
+    return {"inline_keyboard": rows}
+
+
+def tg_answer_callback(callback_id):
+    if not TELEGRAM_BOT_TOKEN:
+        return
+    try:
+        requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/answerCallbackQuery",
+                      json={"callback_query_id": callback_id}, timeout=5)
+    except Exception:
+        pass
+
+
+def tg_send(chat_id, text: str, reply_markup: dict | None = None) -> bool:
     if not TELEGRAM_BOT_TOKEN:
         return False
     try:
+        payload = {"chat_id": chat_id, "text": text[:4000], "parse_mode": "HTML",
+                   "disable_web_page_preview": True}
+        if reply_markup:
+            payload["reply_markup"] = reply_markup
         r = requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
-            json={"chat_id": chat_id, "text": text[:4000], "parse_mode": "HTML",
-                  "disable_web_page_preview": True},
-            timeout=10,
+            json=payload, timeout=10,
         )
         return r.status_code == 200
     except Exception:
@@ -283,26 +526,42 @@ def _fmt_bias(asset_query: str) -> str:
     ticker, name, unit = qc.resolve_ticker(asset_query)
     q = qc.get_quote(ticker)
     if q is None:
-        return f"\u274C Feed down for {name} ({ticker}). Try again shortly."
+        return f"\u274C Can't reach the price feed for {name} right now. Try again in a minute."
     b = qc.get_bias(ticker)
-    return (f"<b>{b['state']}</b> \u2014 {name}\n"
-            f"Spot ${b['price']:,.2f}{unit} | Z {b['z']:+.2f}\u03C3 | {b['trend']}\n\n"
-            f"\U0001F3AF Arm ${b['arm_level']:,.2f} ({b['dist_to_arm_pct']:+.2f}%)\n"
-            f"\U0001F6D1 Invalidation ${b['invalidation']:,.2f}\n"
-            f"\U0001F4CD Target (20 EMA) ${b['target']:,.2f} ({b['dist_to_target_pct']:+.2f}%)")
+    emoji, headline, action = analytics.plain_state(b)
+    trend_plain = ("the bigger trend points UP" if "BULLISH" in b["trend"]
+                   else "the bigger trend points DOWN")
+    stretch = abs(b["z"])
+    stretch_plain = ("sitting right around normal" if stretch < 1 else
+                     "moderately stretched" if stretch < 2 else
+                     "VERY stretched \u2014 like a pulled rubber band")
+    out = (f"{emoji} <b>{name}</b> \u2014 ${b['price']:,.2f}{unit}\n"
+           f"{headline}\n\n"
+           f"\U0001F4CF Price is {stretch_plain} vs its recent average, and {trend_plain}.\n"
+           f"\U0001F3AF {action}")
+    a = analytics.assignment_for(asset_query)
+    if a:
+        side = analytics._signals_today(ticker).get(a["strategy"])
+        if side:
+            out += (f"\n\n\u26A1 <b>Your playbook strategy ({a['strategy_name']}) is "
+                    f"firing a {side.upper()} setup right now.</b>")
+        else:
+            out += (f"\n\n\U0001F4D6 Playbook: {a['strategy_name']} assigned \u2014 "
+                    f"not triggering today.")
+    return out
 
 
 def _fmt_status() -> str:
-    lines = ["\U0001F4CA <b>Terminal Status</b>"]
+    lines = ["\U0001F4CA <b>Your whole board, one glance:</b>"]
     for asset_name, d in qc.load_watchlist().items():
         try:
             b = qc.get_bias(d["ticker"])
-            icon = b["state"].split(" ")[0]
-            trend = "\u25B2" if "BULLISH" in b["trend"] else "\u25BC"
-            lines.append(f"{icon} <b>{asset_name}</b> ${b['price']:,.2f} | "
-                         f"Z {b['z']:+.2f} | {trend}")
+            emoji, _, _ = analytics.plain_state(b)
+            word = {"\U0001F7E2": "dip-buy setup LIVE", "\U0001F534": "fade setup LIVE",
+                    "\U0001F440": "getting close", "\U0001F634": "quiet"}[emoji]
+            lines.append(f"{emoji} <b>{asset_name}</b> ${b['price']:,.2f} \u2014 {word}")
         except Exception:
-            lines.append(f"\u274C <b>{asset_name}</b> \u2014 feed down")
+            lines.append(f"\u274C <b>{asset_name}</b> \u2014 feed unreachable")
     return "\n".join(lines)
 
 
@@ -322,18 +581,27 @@ def _fmt_positions() -> str:
 
 
 HELP_TEXT = (
-    "\u26A1 <b>N-CORE Command Bot</b>\n\n"
-    "/status \u2014 every asset's state at a glance\n"
-    "/bias &lt;asset&gt; \u2014 full readout + action levels\n"
-    "/levels &lt;asset&gt; \u2014 same as /bias\n"
-    "/backtest &lt;asset&gt; \u2014 strategy viability verdicts\n"
-    "/positions \u2014 Guardian-watched positions\n"
-    "/macro \u2014 upcoming high-impact releases\n"
-    "/valid &lt;asset&gt; &lt;entry&gt; [side] \u2014 structural VALID/INVALID verdict\n"
-    "/edge &lt;asset&gt; \u2014 alpha optimizer scan (or NO_EDGE)\n"
-    "/lab &lt;asset&gt; \u2014 walk-forward strategy lab + per-asset assignment\n"
-    "/ask &lt;asset&gt; &lt;question&gt; \u2014 AI read on the live numbers\n\n"
-    "<i>Pure engine math. Statistical interpretation, not financial advice.</i>"
+    "\u26A1 <b>Your terminal, in plain English.</b> Tap the menu buttons below, "
+    "or type any of these:\n\n"
+    "\U0001F4F1 <b>/status</b> \u2014 your whole board in one glance: which assets are "
+    "quiet, which have a live setup.\n"
+    "\U0001F3AF <b>/bias</b> gold \u2014 the full story on one asset: how stretched the "
+    "price is, where to get in, where you're wrong, where to take profit.\n"
+    "\U0001F9EA <b>/lab</b> nvda \u2014 tests 5 trading styles on 5 years of data and "
+    "tells you which (if any) actually made money on data it never saw.\n"
+    "\U0001F50D <b>/scan</b> \u2014 checks your playbook: are any of your validated "
+    "strategies firing a setup TODAY?\n"
+    "\U0001F4D6 <b>/playbook</b> \u2014 your active book: which strategy is assigned "
+    "to which asset, and when.\n"
+    "\U0001F50E <b>/valid</b> sofi 16.50 short \u2014 grades a trade idea against the "
+    "math: VALID or INVALID, with three quick reasons.\n"
+    "\U0001F4CA <b>/backtest</b> gold \u2014 report card for every strategy on this asset.\n"
+    "\U0001F6E1 <b>/positions</b> \u2014 the trades your Guardian is watching.\n"
+    "\U0001F6A8 <b>/macro</b> \u2014 big economic news coming this week that can shake prices.\n"
+    "\U0001F916 <b>/ask</b> gold is now a good entry? \u2014 ask anything; answers come "
+    "from YOUR live numbers, not the internet.\n\n"
+    "<i>Everything here reads out statistics, not certainties \u2014 and none of it "
+    "is financial advice.</i>"
 )
 
 
@@ -369,8 +637,49 @@ def route_command(text: str) -> str:
     cmd = parts[0].lower().split("@")[0] if parts else ""
     arg = parts[1].strip() if len(parts) > 1 else ""
 
+    # Menu-button taps arrive as plain text — map them to commands
+    BUTTON_MAP = {"\U0001F9EA Strategy Lab": "/labmenu", "\U0001F50D Scan Playbook": "/scan",
+                  "\U0001F4F1 Status": "/status", "\U0001F6E1 Positions": "/positions",
+                  "\U0001F4D6 Playbook": "/playbook", "\u2753 Help": "/help"}
+    raw = text.strip()
+    for label, mapped in BUTTON_MAP.items():
+        # labels arrive as REAL emoji chars; compare against decoded label
+        if raw == label.encode().decode("unicode_escape") or raw == label:
+            cmd, arg = mapped, ""
+            break
+
     if cmd in ("/start", "/help"):
         return HELP_TEXT
+
+    if cmd == "/labmenu":
+        return "__LABMENU__"
+
+    if cmd == "/scan":
+        hits = analytics.scan_playbook()
+        if not hits:
+            return ("\U0001F50D <b>Playbook scan: nothing firing today.</b>\n"
+                    "None of your validated strategies see a setup on the current "
+                    "prices. A quiet day \u2014 sitting out IS the strategy.")
+        lines = ["\u26A1 <b>Playbook scan \u2014 LIVE setups:</b>"]
+        for h in hits:
+            verb = "buy-the-dip" if h["side"] == "long" else "fade-the-spike"
+            px = f" at ${h['price']:,.2f}" if h.get("price") else ""
+            lines.append(f"\U0001F3AF <b>{h['asset']}</b>{px} \u2014 your validated "
+                         f"<b>{h['strategy_name']}</b> is firing a {verb} ({h['side'].upper()}) setup.")
+        return "\n".join(lines)
+
+    if cmd == "/playbook":
+        pb = analytics.load_playbook()
+        uniq = {r["key"]: r for r in pb.values()}
+        if not uniq:
+            return "\U0001F4D6 No playbook yet \u2014 run /lab on your assets to earn assignments."
+        lines = ["\U0001F4D6 <b>Your active playbook</b> (walk-forward validated):"]
+        for key, r in uniq.items():
+            lines.append(f"\u2022 <b>{key}</b> \u2192 {r['strategy_name']} "
+                         f"({analytics.STRATEGY_PLAIN.get(r['strategy'], '')}) \u2014 "
+                         f"assigned {r.get('assigned_at', '?')}")
+        lines.append("\nFull stats live in PLAYBOOK.md in the repo \u2014 the honest audit trail.")
+        return "\n".join(lines)
     if cmd == "/status":
         return _fmt_status()
     if cmd in ("/bias", "/levels"):
@@ -468,6 +777,23 @@ async def telegram_webhook(
         raise HTTPException(status_code=403, detail="bad secret")
 
     update = await request.json()
+
+    # ── Inline-button taps (callback queries) ──
+    cq = update.get("callback_query")
+    if cq:
+        chat_id = str(((cq.get("message") or {}).get("chat") or {}).get("id", ""))
+        if not chat_id or (TELEGRAM_CHAT_ID and chat_id != str(TELEGRAM_CHAT_ID)):
+            return {"ok": True}
+        tg_answer_callback(cq.get("id"))
+        data = (cq.get("data") or "")
+        if "|" in data:
+            action, target = data.split("|", 1)
+            if action == "lab":
+                tg_send(chat_id, route_command(f"/lab {target}"))
+            elif action == "bias":
+                tg_send(chat_id, route_command(f"/bias {target}"))
+        return {"ok": True}
+
     msg = update.get("message") or update.get("edited_message") or {}
     chat_id = str((msg.get("chat") or {}).get("id", ""))
     text = (msg.get("text") or "").strip()
@@ -479,5 +805,11 @@ async def telegram_webhook(
         return {"ok": True}
 
     reply = route_command(text)
-    tg_send(chat_id, reply)
+    if reply == "__LABMENU__":
+        tg_send(chat_id, "\U0001F9EA Pick an asset to run the lab on:",
+                reply_markup=asset_inline_keyboard("lab"))
+    elif text.strip().split("@")[0].lower() == "/start":
+        tg_send(chat_id, reply, reply_markup=MAIN_KEYBOARD)
+    else:
+        tg_send(chat_id, reply)
     return {"ok": True}
