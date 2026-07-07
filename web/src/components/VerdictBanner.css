@@ -1,0 +1,22 @@
+.verdict-banner {
+  padding: 16px;
+  margin-bottom: 16px;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bottom));
+  border: 1px solid var(--border);
+  border-left: 3px solid transparent;
+}
+
+.verdict-banner-state {
+  display: block;
+  font-size: 17px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.verdict-banner-headline {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+}

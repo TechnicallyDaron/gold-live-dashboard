@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 
 // Runs `fetcher` immediately, then every `intervalMs`, pausing while the
-// tab is hidden. Returns { data, error, loading }.
-export function usePolling(fetcher, deps = [], intervalMs = 60000) {
+// tab is hidden. Pass `enabled: false` to skip fetching (e.g. while a
+// required param like the selected asset isn't ready yet).
+// Returns { data, error, loading }.
+export function usePolling(fetcher, deps = [], intervalMs = 60000, enabled = true) {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -10,6 +12,7 @@ export function usePolling(fetcher, deps = [], intervalMs = 60000) {
   fetcherRef.current = fetcher
 
   useEffect(() => {
+    if (!enabled) return undefined
     let cancelled = false
     let timer = null
 
@@ -51,7 +54,7 @@ export function usePolling(fetcher, deps = [], intervalMs = 60000) {
       document.removeEventListener('visibilitychange', onVisibility)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps)
+  }, [...deps, enabled])
 
   return { data, error, loading }
 }

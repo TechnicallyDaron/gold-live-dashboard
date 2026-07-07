@@ -1,0 +1,49 @@
+.bias-header {
+  margin-bottom: 16px;
+}
+
+.bias-title {
+  font-size: 26px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text);
+  letter-spacing: -0.3px;
+}
+
+.bias-verdict-skeleton {
+  height: 84px;
+  margin-bottom: 16px;
+}
+
+.bias-grid-skeleton {
+  height: 160px;
+  margin-bottom: 16px;
+}
+
+.bias-levels-skeleton {
+  height: 140px;
+  margin-bottom: 16px;
+}
+
+.bias-feed-down {
+  padding: 16px;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bottom));
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--short);
+}
+
+.bias-feed-down-title {
+  display: block;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--short);
+  letter-spacing: 0.4px;
+  margin-bottom: 6px;
+}
+
+.bias-feed-down p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}

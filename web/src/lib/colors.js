@@ -9,3 +9,14 @@ export const BIAS_COLOR_VAR = {
 export function biasColorVar(color) {
   return BIAS_COLOR_VAR[color] || 'var(--muted)'
 }
+
+// Maps /api/backtest viability.class to design-token CSS vars.
+export const VIABILITY_COLOR_VAR = {
+  good: 'var(--long)',
+  mid: 'var(--watch)',
+  bad: 'var(--short)',
+}
+
+export function viabilityColorVar(cls) {
+  return VIABILITY_COLOR_VAR[cls] || 'var(--muted)'
+}
