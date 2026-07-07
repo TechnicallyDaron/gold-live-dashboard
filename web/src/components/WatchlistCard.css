@@ -1,0 +1,86 @@
+.watchlist-card-skeleton {
+  height: 76px;
+  margin-bottom: 12px;
+}
+
+.watchlist-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bottom));
+  border: 1px solid var(--border);
+  border-left: 3px solid transparent;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.watchlist-card:active {
+  transform: scale(0.99);
+}
+
+.watchlist-card--down {
+  border-left-color: var(--short);
+}
+
+.watchlist-card-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.watchlist-card-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.watchlist-card-price {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.watchlist-card-feed-down {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--short);
+  letter-spacing: 0.4px;
+}
+
+.watchlist-card-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.watchlist-card-pct {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.watchlist-card-pct--up {
+  color: var(--long);
+}
+
+.watchlist-card-pct--down {
+  color: var(--short);
+}
+
+.watchlist-card-chip {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid;
+  white-space: nowrap;
+}

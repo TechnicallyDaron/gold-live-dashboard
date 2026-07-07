@@ -1,0 +1,28 @@
+.health-dot-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.health-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.health-dot--online {
+  background: var(--long);
+  box-shadow: 0 0 6px var(--long);
+}
+
+.health-dot--offline {
+  background: var(--short);
+  box-shadow: 0 0 6px var(--short);
+}
+
+.health-dot-label {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+}
