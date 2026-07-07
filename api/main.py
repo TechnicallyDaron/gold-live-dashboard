@@ -22,6 +22,8 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 import quant_core as qc
+from api import ai
+from pydantic import BaseModel
 
 app = FastAPI(title="N-CORE Quant API", version="1.0.0")
 
@@ -147,6 +149,32 @@ def history(asset: str, days: int = 500):
     return {"asset": name, "ticker": ticker, "unit": unit, "rows": rows}
 
 
+class AskBody(BaseModel):
+    asset: str
+    question: str
+
+
+@app.post("/api/ask")
+def api_ask(body: AskBody):
+    try:
+        return {"answer": ai.ask(body.asset, body.question),
+                "usage": ai.usage_today()}
+    except ai.AIUnavailable:
+        raise HTTPException(status_code=503, detail="AI not configured — set ANTHROPIC_API_KEY on this service.")
+    except ai.AIBudgetExceeded:
+        raise HTTPException(status_code=429, detail=f"Daily AI budget reached ({ai.DAILY_LIMIT} calls). Resets at midnight UTC.")
+
+
+@app.get("/api/sentiment/{asset}")
+def api_sentiment(asset: str):
+    try:
+        return ai.sentiment(asset)
+    except ai.AIUnavailable:
+        raise HTTPException(status_code=503, detail="AI not configured — set ANTHROPIC_API_KEY on this service.")
+    except ai.AIBudgetExceeded:
+        raise HTTPException(status_code=429, detail=f"Daily AI budget reached ({ai.DAILY_LIMIT} calls). Resets at midnight UTC.")
+
+
 # =====================================================================
 # TELEGRAM WEBHOOK — the command bot (Phase 4a: pure math, no AI spend)
 # =====================================================================
@@ -215,7 +243,7 @@ HELP_TEXT = (
     "/backtest &lt;asset&gt; \u2014 strategy viability verdicts\n"
     "/positions \u2014 Guardian-watched positions\n"
     "/macro \u2014 upcoming high-impact releases\n"
-    "/ask &lt;question&gt; \u2014 AI analysis (coming in Phase 4b)\n\n"
+    "/ask &lt;asset&gt; &lt;question&gt; \u2014 AI read on the live numbers\n\n"
     "<i>Pure engine math. Statistical interpretation, not financial advice.</i>"
 )
 
@@ -265,8 +293,19 @@ def route_command(text: str) -> str:
     if cmd == "/macro":
         return _fmt_macro()
     if cmd == "/ask":
-        return ("\U0001F916 AI analysis is Phase 4b \u2014 not yet funded by the operator. "
-                "The math commands above are free: /status, /bias, /backtest.")
+        if not arg:
+            return "Usage: /ask <asset> <question>\nExample: /ask sofi is now a good entry?"
+        tokens = arg.split(maxsplit=1)
+        asset = tokens[0]
+        question = tokens[1] if len(tokens) > 1 else "Give me the full read on this setup."
+        try:
+            return f"\U0001F916 <b>{asset.upper()}</b>\n\n{ai.ask(asset, question)}"
+        except ai.AIUnavailable:
+            return "\U0001F916 AI not configured \u2014 ANTHROPIC_API_KEY missing on the API service."
+        except ai.AIBudgetExceeded:
+            return f"\U0001F916 Daily AI budget reached ({ai.DAILY_LIMIT}). Pure-math commands still free: /bias, /status."
+        except Exception:
+            return "\u274C AI call failed \u2014 feed or API hiccup. Try again shortly."
     return "Unknown command. /help for the list."
 
 
