@@ -20,3 +20,11 @@ export const VIABILITY_COLOR_VAR = {
 export function viabilityColorVar(cls) {
   return VIABILITY_COLOR_VAR[cls] || 'var(--muted)'
 }
+
+// Maps AI sentiment/tilt words (bullish/bearish/neutral, any case) to tokens.
+export function tiltColorVar(word) {
+  const w = (word || '').toLowerCase()
+  if (w === 'bullish') return 'var(--long)'
+  if (w === 'bearish') return 'var(--short)'
+  return 'var(--muted)'
+}

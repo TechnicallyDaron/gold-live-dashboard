@@ -10,20 +10,54 @@
   letter-spacing: -0.3px;
 }
 
-.ai-macro-pill {
+.ai-macro-btn {
   display: block;
   width: 100%;
   padding: 12px;
   margin-bottom: 16px;
   border-radius: var(--radius-sm);
-  border: 1px dashed var(--border);
-  background: transparent;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
+  border: 1px solid var(--volt);
+  background: rgba(0, 229, 255, 0.1);
+  color: var(--volt);
+  font-size: 13px;
+  font-weight: 700;
   text-align: center;
-  opacity: 0.6;
-  cursor: not-allowed;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sentiment-skeleton {
+  height: 90px;
+  margin-bottom: 16px;
+}
+
+.news-ai-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--watch);
+  background: rgba(226, 169, 59, 0.08);
+  color: var(--watch);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.news-ai-retry {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--watch);
+  background: transparent;
+  color: var(--watch);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .news-card-skeleton {
