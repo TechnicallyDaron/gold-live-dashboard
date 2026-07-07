@@ -110,6 +110,43 @@ def news(asset: str):
     return qc.news_items(ticker)
 
 
+PULSE_TICKERS = {"SPY": "SPY", "QQQ": "QQQ", "GLD": "GLD", "BTC": "BTC-USD",
+                 "AAPL": "AAPL", "NVDA": "NVDA", "TSLA": "TSLA"}
+
+
+@app.get("/api/tape")
+def tape():
+    """One call, whole marquee: quotes for the pulse instruments.
+    Dead feeds return null for that symbol — render them honestly."""
+    out = []
+    for label, tk in PULSE_TICKERS.items():
+        q = qc.get_quote(tk)
+        out.append({"symbol": label, "ticker": tk, "quote": q})
+    return out
+
+
+@app.get("/api/history/{asset}")
+def history(asset: str, days: int = 500):
+    """Chart series: price + 20EMA baseline + ±2σ bands + 200EMA macro.
+    Rows are chronological; NaN indicator rows are dropped."""
+    days = max(30, min(days, 1300))
+    ticker, name, unit = qc.resolve_ticker(asset)
+    try:
+        df = qc.fetch_history(ticker)
+    except Exception:
+        raise HTTPException(status_code=502, detail=f"Feed down for {ticker}")
+    valid = df.dropna(subset=["Baseline", "Upper_Band", "Lower_Band", "Macro_Filter"]).tail(days)
+    rows = [{
+        "date": idx.strftime("%Y-%m-%d"),
+        "price": round(float(r.Price), 2),
+        "baseline": round(float(r.Baseline), 2),
+        "upper": round(float(r.Upper_Band), 2),
+        "lower": round(float(r.Lower_Band), 2),
+        "macro": round(float(r.Macro_Filter), 2),
+    } for idx, r in zip(valid.index, valid.itertuples())]
+    return {"asset": name, "ticker": ticker, "unit": unit, "rows": rows}
+
+
 # =====================================================================
 # TELEGRAM WEBHOOK — the command bot (Phase 4a: pure math, no AI spend)
 # =====================================================================
