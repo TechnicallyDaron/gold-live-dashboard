@@ -2,10 +2,11 @@ streamlit
 yfinance
 pandas
 numpy
-plotly
-anthropic
-streamlit-autorefresh
+requests
 beautifulsoup4
 lxml
 python-dotenv
-matplotlib
+plotly
+anthropic
+fastapi
+uvicorn
