@@ -1,0 +1,9 @@
+{
+  "assigned_at": "2026-07-07",
+  "criteria": {"split": 0.7, "min_test_trades": 10, "min_win_rate": 0.55, "min_profit_factor": 1.3},
+  "assignments": {
+    "GLD": {"strategy": "pullback", "name": "Trend Pullback", "assigned_at": "2026-07-07"},
+    "IWM": {"strategy": "rsi2", "name": "Fast RSI(2)", "assigned_at": "2026-07-07"},
+    "NVDA": {"strategy": "rsi2", "name": "Fast RSI(2)", "assigned_at": "2026-07-07"}
+  }
+}
