@@ -1,123 +1,123 @@
 {
   "Gold": {
     "state": "\u26aa NO TRADE",
-    "price": 4091.1,
-    "checked_at": "2026-07-08T20:00:41Z"
+    "price": 4085.5,
+    "checked_at": "2026-07-08T20:30:39Z"
   },
   "S&P 500": {
     "state": "\u26aa NO TRADE",
-    "price": 7482.57,
-    "checked_at": "2026-07-08T20:00:41Z"
+    "price": 7482.71,
+    "checked_at": "2026-07-08T20:30:39Z"
   },
   "SOFI": {
     "state": "\u26aa NO TRADE",
     "price": 17.73,
-    "checked_at": "2026-07-08T20:00:41Z"
+    "checked_at": "2026-07-08T20:30:39Z"
   },
   "SPY": {
     "state": "\u26aa NO TRADE",
-    "price": 745.32,
-    "checked_at": "2026-07-08T20:00:41Z"
+    "price": 745.4,
+    "checked_at": "2026-07-08T20:30:39Z"
   },
   "QQQ": {
     "state": "\u26aa NO TRADE",
     "price": 711.44,
-    "checked_at": "2026-07-08T20:00:41Z"
+    "checked_at": "2026-07-08T20:30:39Z"
   },
   "IWM": {
     "state": "\u26aa NO TRADE",
-    "price": 293.53,
-    "checked_at": "2026-07-08T20:00:41Z"
+    "price": 293.48,
+    "checked_at": "2026-07-08T20:30:39Z"
   },
   "DIA": {
     "state": "\u26aa NO TRADE",
-    "price": 522.82,
-    "checked_at": "2026-07-08T20:00:41Z"
+    "price": 522.77,
+    "checked_at": "2026-07-08T20:30:39Z"
   },
   "GLD": {
     "state": "\u26aa NO TRADE",
-    "price": 374.37,
-    "checked_at": "2026-07-08T20:00:41Z"
+    "price": 374.45,
+    "checked_at": "2026-07-08T20:30:39Z"
   },
   "TLT": {
     "state": "\u26aa NO TRADE",
     "price": 84.36,
-    "checked_at": "2026-07-08T20:00:41Z"
+    "checked_at": "2026-07-08T20:30:39Z"
   },
   "USO": {
     "state": "\u26aa NO TRADE",
-    "price": 112.29,
-    "checked_at": "2026-07-08T20:00:41Z"
+    "price": 112.21,
+    "checked_at": "2026-07-08T20:30:39Z"
   },
   "NVDA": {
     "state": "\u26aa NO TRADE",
     "price": 204.12,
-    "checked_at": "2026-07-08T20:00:41Z"
+    "checked_at": "2026-07-08T20:30:39Z"
   },
   "TSLA": {
     "state": "\u26aa NO TRADE",
-    "price": 393.93,
-    "checked_at": "2026-07-08T20:00:41Z"
+    "price": 394.06,
+    "checked_at": "2026-07-08T20:30:39Z"
   },
   "AMD": {
     "state": "\u26aa NO TRADE",
     "price": 517.41,
-    "checked_at": "2026-07-08T20:00:41Z"
+    "checked_at": "2026-07-08T20:30:39Z"
   },
   "AAPL": {
     "state": "\u26aa NO TRADE",
     "price": 313.39,
-    "checked_at": "2026-07-08T20:00:41Z"
+    "checked_at": "2026-07-08T20:30:39Z"
   },
   "AMZN": {
     "state": "\u26aa NO TRADE",
     "price": 243.62,
-    "checked_at": "2026-07-08T20:00:41Z"
+    "checked_at": "2026-07-08T20:30:39Z"
   },
   "META": {
     "state": "\u26aa NO TRADE",
     "price": 603.12,
-    "checked_at": "2026-07-08T20:00:41Z"
+    "checked_at": "2026-07-08T20:30:39Z"
   },
   "MSFT": {
     "state": "\u26aa NO TRADE",
     "price": 383.34,
-    "checked_at": "2026-07-08T20:00:41Z"
+    "checked_at": "2026-07-08T20:30:39Z"
   },
   "NFLX": {
     "state": "\u26aa NO TRADE",
     "price": 75.59,
-    "checked_at": "2026-07-08T20:00:41Z"
+    "checked_at": "2026-07-08T20:30:39Z"
   },
   "GOOG": {
     "state": "\u26aa NO TRADE",
     "price": 358.71,
-    "checked_at": "2026-07-08T20:00:41Z"
+    "checked_at": "2026-07-08T20:30:39Z"
   },
   "DIS": {
     "state": "\u26aa NO TRADE",
-    "price": 96.71,
-    "checked_at": "2026-07-08T20:00:41Z"
+    "price": 96.7,
+    "checked_at": "2026-07-08T20:30:39Z"
   },
   "JPM": {
     "state": "\u26aa NO TRADE",
-    "price": 330.52,
-    "checked_at": "2026-07-08T20:00:41Z"
+    "price": 330.62,
+    "checked_at": "2026-07-08T20:30:39Z"
   },
   "V": {
     "state": "\u26aa NO TRADE",
-    "price": 347.52,
-    "checked_at": "2026-07-08T20:00:41Z"
+    "price": 347.53,
+    "checked_at": "2026-07-08T20:30:39Z"
   },
   "BABA": {
     "state": "\u26aa NO TRADE",
-    "price": 108.97,
-    "checked_at": "2026-07-08T20:00:41Z"
+    "price": 108.98,
+    "checked_at": "2026-07-08T20:30:39Z"
   },
   "COIN": {
     "state": "\u26aa NO TRADE",
     "price": 159.36,
-    "checked_at": "2026-07-08T20:00:41Z"
+    "checked_at": "2026-07-08T20:30:39Z"
   },
   "_meta": {
     "last_digest": "2026-07-08",
