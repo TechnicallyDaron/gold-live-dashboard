@@ -11,6 +11,7 @@ import MetricsGrid from '../components/MetricsGrid.jsx'
 import ActionLevels from '../components/ActionLevels.jsx'
 import LiveEdgeSection from '../components/LiveEdgeSection.jsx'
 import StrategyLabSection from '../components/StrategyLabSection.jsx'
+import CandidatesStrip from '../components/CandidatesStrip.jsx'
 import BacktestStrip from '../components/BacktestStrip.jsx'
 import FullBacktestSection from '../components/FullBacktestSection.jsx'
 import QuickPrompts from '../components/QuickPrompts.jsx'
@@ -54,6 +55,8 @@ export default function Bias() {
       {names.length > 0 && (
         <AssetSwitcher names={names} selected={selected} onSelect={handleSelect} />
       )}
+
+      <CandidatesStrip />
 
       {biasLoading && !bias && (
         <>

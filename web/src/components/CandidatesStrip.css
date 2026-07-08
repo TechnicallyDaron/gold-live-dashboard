@@ -1,0 +1,114 @@
+.candidates-strip {
+  margin-bottom: 16px;
+}
+
+.candidates-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bottom));
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.candidates-chevron {
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+
+.candidates-chevron--open {
+  transform: rotate(180deg);
+}
+
+.candidates-body {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.candidates-note {
+  margin: 0 0 4px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.candidates-skeleton {
+  height: 60px;
+}
+
+.candidates-empty {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+  padding: 12px 0;
+}
+
+.candidates-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bottom));
+  border: 1px solid var(--border);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.candidates-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.candidates-row-asset {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.candidates-row-detail {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: capitalize;
+}
+
+.candidates-validated-chip {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--long);
+  background: rgba(47, 191, 113, 0.12);
+  border: 1px solid var(--long);
+  padding: 4px 8px;
+  border-radius: 999px;
+}
+
+.candidates-unvalidated-chip {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  color: var(--ink);
+  background: var(--watch);
+  border: 1px solid var(--watch);
+  padding: 5px 9px;
+  border-radius: 999px;
+  box-shadow: 0 0 10px rgba(226, 169, 59, 0.5);
+  max-width: 130px;
+  text-align: center;
+  line-height: 1.3;
+}
