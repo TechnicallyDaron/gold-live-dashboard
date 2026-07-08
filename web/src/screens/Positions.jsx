@@ -4,6 +4,7 @@ import { useWatchlist } from '../lib/useWatchlist.js'
 import { useJournal } from '../lib/useJournal.js'
 import PositionCard from '../components/PositionCard.jsx'
 import VoltBell from '../components/VoltBell.jsx'
+import UserBadge from '../components/UserBadge.jsx'
 import PositionForm from '../components/PositionForm.jsx'
 import ClosePositionForm from '../components/ClosePositionForm.jsx'
 import JournalDashboard from '../components/JournalDashboard.jsx'
@@ -25,7 +26,10 @@ export default function Positions() {
     <div className="positions-screen">
       <header className="positions-header">
         <h1 className="positions-title">Positions</h1>
-        <VoltBell />
+        <div className="header-icons-row">
+          <VoltBell />
+          <UserBadge />
+        </div>
       </header>
 
       <button type="button" className="positions-log-btn" onClick={() => setShowForm(true)}>

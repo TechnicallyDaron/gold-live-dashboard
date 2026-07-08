@@ -7,6 +7,7 @@ import AssetSwitcher from '../components/AssetSwitcher.jsx'
 import NewsCard from '../components/NewsCard.jsx'
 import SentimentOverall from '../components/SentimentOverall.jsx'
 import VoltBell from '../components/VoltBell.jsx'
+import UserBadge from '../components/UserBadge.jsx'
 import './News.css'
 
 export default function News() {
@@ -40,7 +41,10 @@ export default function News() {
     <div className="news-screen">
       <header className="news-header">
         <h1 className="news-title">News</h1>
-        <VoltBell />
+        <div className="header-icons-row">
+          <VoltBell />
+          <UserBadge />
+        </div>
       </header>
 
       {names.length > 0 && (

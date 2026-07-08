@@ -15,6 +15,7 @@ import WatchlistGrid from '../components/WatchlistGrid.jsx'
 import QuickLookModal from '../components/QuickLookModal.jsx'
 import MicroChart from '../components/MicroChart.jsx'
 import VoltBell from '../components/VoltBell.jsx'
+import UserBadge from '../components/UserBadge.jsx'
 import ConfirmDialog from '../components/ConfirmDialog.jsx'
 import WatchlistAddForm from '../components/WatchlistAddForm.jsx'
 import './Briefing.css'
@@ -87,6 +88,7 @@ export default function Briefing() {
         <div className="briefing-header-right">
           <HealthDot />
           <VoltBell />
+          <UserBadge />
         </div>
       </header>
 

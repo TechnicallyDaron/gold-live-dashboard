@@ -6,6 +6,7 @@ import AssetSwitcher from '../components/AssetSwitcher.jsx'
 import RangeToggle from '../components/RangeToggle.jsx'
 import LightweightChart from '../components/LightweightChart.jsx'
 import VoltBell from '../components/VoltBell.jsx'
+import UserBadge from '../components/UserBadge.jsx'
 import './Chart.css'
 
 export default function Chart() {
@@ -37,7 +38,10 @@ export default function Chart() {
     <div className="chart-screen">
       <header className="chart-header">
         <h1 className="chart-title">Chart</h1>
-        <VoltBell />
+        <div className="header-icons-row">
+          <VoltBell />
+          <UserBadge />
+        </div>
       </header>
 
       {names.length > 0 && (

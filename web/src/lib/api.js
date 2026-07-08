@@ -7,8 +7,17 @@ class ApiError extends Error {
   }
 }
 
-async function request(path, options) {
-  const res = await fetch(`${BASE_URL}${path}`, options)
+// Set by useAuth once a Supabase session exists; every request attaches it.
+// Stays null in file-mode (no auth gate configured), matching prior behavior.
+let authToken = null
+export function setAuthToken(token) {
+  authToken = token
+}
+
+async function request(path, options = {}) {
+  const headers = { ...(options.headers || {}) }
+  if (authToken) headers.Authorization = `Bearer ${authToken}`
+  const res = await fetch(`${BASE_URL}${path}`, { ...options, headers })
   if (!res.ok) {
     let detail = res.statusText
     try {
@@ -60,8 +69,7 @@ export const api = {
   candidates: () => request('/api/candidates'),
   strategyLab: (asset) => request(`/api/strategy-lab/${encodeURIComponent(asset)}`),
   optimizedEdge: (asset) => request(`/api/optimized-edge/${encodeURIComponent(asset)}`),
-  me: (token) =>
-    request('/api/me', token ? { headers: { Authorization: `Bearer ${token}` } } : undefined),
+  me: () => request('/api/me'),
 }
 
 export { ApiError }

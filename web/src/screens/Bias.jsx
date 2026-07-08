@@ -16,6 +16,7 @@ import BacktestStrip from '../components/BacktestStrip.jsx'
 import FullBacktestSection from '../components/FullBacktestSection.jsx'
 import QuickPrompts from '../components/QuickPrompts.jsx'
 import VoltBell from '../components/VoltBell.jsx'
+import UserBadge from '../components/UserBadge.jsx'
 import './Bias.css'
 
 export default function Bias() {
@@ -49,7 +50,10 @@ export default function Bias() {
     <div className="bias-screen">
       <header className="bias-header">
         <h1 className="bias-title">Bias</h1>
-        <VoltBell />
+        <div className="header-icons-row">
+          <VoltBell />
+          <UserBadge />
+        </div>
       </header>
 
       {names.length > 0 && (

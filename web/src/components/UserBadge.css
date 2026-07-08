@@ -1,0 +1,59 @@
+.user-badge-wrap {
+  position: relative;
+}
+
+.user-badge {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--panel-top);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.user-badge-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+
+.user-badge-panel {
+  position: absolute;
+  top: 36px;
+  right: 0;
+  z-index: 61;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 200px;
+  padding: 14px;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bottom));
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.user-badge-email {
+  font-size: 12px;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.user-badge-signout {
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--short);
+  background: rgba(228, 87, 76, 0.1);
+  color: var(--short);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}

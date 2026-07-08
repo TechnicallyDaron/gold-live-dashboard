@@ -48,6 +48,12 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.header-icons-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 button {
   font-family: inherit;
   color: inherit;
