@@ -6,6 +6,8 @@
     "strike": 17.50,
     "expiration": "2026-08-07",
     "premium_paid": 1.04,
+     "entry_premium": 1.04,
+    "entry_date": "2026-07-01",
     "premium_stop": 0.52,
     "time_stop": "2026-07-20",
     "invalidation_above": 19.17,
