@@ -1,123 +1,123 @@
 {
   "Gold": {
     "state": "\u26aa NO TRADE",
-    "price": 4069.1,
-    "checked_at": "2026-07-08T17:00:42Z"
+    "price": 4070.7,
+    "checked_at": "2026-07-08T17:04:33Z"
   },
   "S&P 500": {
     "state": "\u26aa NO TRADE",
-    "price": 7470.64,
-    "checked_at": "2026-07-08T17:00:42Z"
+    "price": 7470.49,
+    "checked_at": "2026-07-08T17:04:33Z"
   },
   "SOFI": {
     "state": "\u26aa NO TRADE",
-    "price": 17.46,
-    "checked_at": "2026-07-08T17:00:42Z"
+    "price": 17.43,
+    "checked_at": "2026-07-08T17:04:33Z"
   },
   "SPY": {
     "state": "\u26aa NO TRADE",
-    "price": 744.38,
-    "checked_at": "2026-07-08T17:00:42Z"
+    "price": 744.31,
+    "checked_at": "2026-07-08T17:04:33Z"
   },
   "QQQ": {
     "state": "\u26aa NO TRADE",
-    "price": 708.62,
-    "checked_at": "2026-07-08T17:00:42Z"
+    "price": 708.58,
+    "checked_at": "2026-07-08T17:04:33Z"
   },
   "IWM": {
     "state": "\u26aa NO TRADE",
-    "price": 292.89,
-    "checked_at": "2026-07-08T17:00:42Z"
+    "price": 292.88,
+    "checked_at": "2026-07-08T17:04:33Z"
   },
   "DIA": {
     "state": "\u26aa NO TRADE",
-    "price": 522.2,
-    "checked_at": "2026-07-08T17:00:42Z"
+    "price": 522.45,
+    "checked_at": "2026-07-08T17:04:33Z"
   },
   "GLD": {
     "state": "\u26aa NO TRADE",
-    "price": 372.75,
-    "checked_at": "2026-07-08T17:00:42Z"
+    "price": 372.54,
+    "checked_at": "2026-07-08T17:04:33Z"
   },
   "TLT": {
     "state": "\u26aa NO TRADE",
-    "price": 84.25,
-    "checked_at": "2026-07-08T17:00:42Z"
+    "price": 84.29,
+    "checked_at": "2026-07-08T17:04:33Z"
   },
   "USO": {
     "state": "\u26aa NO TRADE",
-    "price": 112.8,
-    "checked_at": "2026-07-08T17:00:42Z"
+    "price": 112.74,
+    "checked_at": "2026-07-08T17:04:33Z"
   },
   "NVDA": {
     "state": "\u26aa NO TRADE",
-    "price": 200.79,
-    "checked_at": "2026-07-08T17:00:42Z"
+    "price": 200.33,
+    "checked_at": "2026-07-08T17:04:33Z"
   },
   "TSLA": {
     "state": "\u26aa NO TRADE",
-    "price": 394.0,
-    "checked_at": "2026-07-08T17:00:42Z"
+    "price": 394.18,
+    "checked_at": "2026-07-08T17:04:33Z"
   },
   "AMD": {
     "state": "\u26aa NO TRADE",
-    "price": 512.08,
-    "checked_at": "2026-07-08T17:00:42Z"
+    "price": 510.86,
+    "checked_at": "2026-07-08T17:04:33Z"
   },
   "AAPL": {
     "state": "\u26aa NO TRADE",
-    "price": 313.2,
-    "checked_at": "2026-07-08T17:00:42Z"
+    "price": 313.33,
+    "checked_at": "2026-07-08T17:04:33Z"
   },
   "AMZN": {
     "state": "\u26aa NO TRADE",
-    "price": 242.11,
-    "checked_at": "2026-07-08T17:00:42Z"
+    "price": 242.41,
+    "checked_at": "2026-07-08T17:04:33Z"
   },
   "META": {
     "state": "\u26aa NO TRADE",
-    "price": 603.82,
-    "checked_at": "2026-07-08T17:00:42Z"
+    "price": 604.26,
+    "checked_at": "2026-07-08T17:04:33Z"
   },
   "MSFT": {
     "state": "\u26aa NO TRADE",
-    "price": 381.78,
-    "checked_at": "2026-07-08T17:00:42Z"
+    "price": 381.86,
+    "checked_at": "2026-07-08T17:04:33Z"
   },
   "NFLX": {
     "state": "\u26aa NO TRADE",
-    "price": 76.11,
-    "checked_at": "2026-07-08T17:00:42Z"
+    "price": 76.23,
+    "checked_at": "2026-07-08T17:04:33Z"
   },
   "GOOG": {
     "state": "\u26aa NO TRADE",
-    "price": 357.85,
-    "checked_at": "2026-07-08T17:00:42Z"
+    "price": 357.71,
+    "checked_at": "2026-07-08T17:04:33Z"
   },
   "DIS": {
     "state": "\u26aa NO TRADE",
-    "price": 97.28,
-    "checked_at": "2026-07-08T17:00:42Z"
+    "price": 97.33,
+    "checked_at": "2026-07-08T17:04:33Z"
   },
   "JPM": {
     "state": "\u26aa NO TRADE",
-    "price": 333.75,
-    "checked_at": "2026-07-08T17:00:42Z"
+    "price": 333.86,
+    "checked_at": "2026-07-08T17:04:33Z"
   },
   "V": {
     "state": "\u26aa NO TRADE",
-    "price": 347.58,
-    "checked_at": "2026-07-08T17:00:42Z"
+    "price": 347.74,
+    "checked_at": "2026-07-08T17:04:33Z"
   },
   "BABA": {
     "state": "\u26aa NO TRADE",
-    "price": 108.85,
-    "checked_at": "2026-07-08T17:00:42Z"
+    "price": 108.86,
+    "checked_at": "2026-07-08T17:04:33Z"
   },
   "COIN": {
     "state": "\u26aa NO TRADE",
-    "price": 159.91,
-    "checked_at": "2026-07-08T17:00:42Z"
+    "price": 159.71,
+    "checked_at": "2026-07-08T17:04:33Z"
   },
   "_meta": {
     "last_digest": "2026-07-08",
