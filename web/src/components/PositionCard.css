@@ -27,6 +27,38 @@
   white-space: nowrap;
 }
 
+.pnl-badge {
+  display: inline-block;
+  padding: 6px 14px;
+  margin-bottom: 12px;
+  border-radius: 999px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.pnl-badge--positive {
+  color: var(--long);
+  background: rgba(47, 191, 113, 0.12);
+  border: 1px solid var(--long);
+  box-shadow: 0 0 14px rgba(47, 191, 113, 0.4), 0 0 4px rgba(0, 229, 255, 0.25);
+}
+
+.pnl-badge--negative {
+  color: var(--short);
+  background: rgba(228, 87, 76, 0.08);
+  border: 1px solid rgba(228, 87, 76, 0.4);
+}
+
+.pnl-badge--unavailable {
+  color: var(--muted);
+  background: rgba(151, 161, 179, 0.08);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  cursor: help;
+}
+
 .position-card-row {
   display: flex;
   align-items: baseline;

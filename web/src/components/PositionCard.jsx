@@ -12,12 +12,30 @@ const SHIELD_LABEL = {
   CUT: { text: 'Horizon exhausted', color: 'var(--short)' },
 }
 
+function PnlBadge({ pnl }) {
+  if (!pnl) return null
+  if (pnl.pnl_pct == null) {
+    return (
+      <span className="pnl-badge pnl-badge--unavailable" title={pnl.note || 'PnL unavailable'}>
+        PNL UNAVAILABLE
+      </span>
+    )
+  }
+  const positive = pnl.pnl_pct > 0
+  return (
+    <span className={positive ? 'pnl-badge pnl-badge--positive' : 'pnl-badge pnl-badge--negative'}>
+      {positive ? '+' : ''}
+      {pnl.pnl_pct.toFixed(1)}%
+    </span>
+  )
+}
+
 export default function PositionCard({ position }) {
   const {
     asset, strike, type, expiration,
     premium_paid: premiumPaidLegacy, entry_premium: entryPremium,
     premium_stop: premiumStop, time_stop: timeStop,
-    invalidation_above: invalAbove, invalidation_below: invalBelow, notes, shield,
+    invalidation_above: invalAbove, invalidation_below: invalBelow, notes, shield, pnl,
   } = position
   const premiumPaid = premiumPaidLegacy ?? entryPremium
 
@@ -33,6 +51,8 @@ export default function PositionCard({ position }) {
         </span>
         <span className="position-card-exp">exp {expiration}</span>
       </div>
+
+      <PnlBadge pnl={pnl} />
 
       {premiumPaid != null && (
         <div className="position-card-row">
