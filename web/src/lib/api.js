@@ -55,6 +55,12 @@ export const api = {
   addPosition: (body) => postJSON('/api/positions', body),
   addWatchlist: (body) => postJSON('/api/watchlist', body),
   removeWatchlist: (name) => del(`/api/watchlist/${encodeURIComponent(name)}`),
+  closePosition: (id, body) => postJSON(`/api/positions/${encodeURIComponent(id)}/close`, body),
+  journal: () => request('/api/journal'),
+  candidates: () => request('/api/candidates'),
+  strategyLab: (asset) => request(`/api/strategy-lab/${encodeURIComponent(asset)}`),
+  me: (token) =>
+    request('/api/me', token ? { headers: { Authorization: `Bearer ${token}` } } : undefined),
 }
 
 export { ApiError }

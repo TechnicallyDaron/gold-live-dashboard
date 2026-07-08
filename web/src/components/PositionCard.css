@@ -27,10 +27,30 @@
   white-space: nowrap;
 }
 
+.position-card-pnl-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.position-card-close-btn {
+  flex-shrink: 0;
+  padding: 7px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
 .pnl-badge {
   display: inline-block;
   padding: 6px 14px;
-  margin-bottom: 12px;
   border-radius: 999px;
   font-size: 16px;
   font-weight: 700;

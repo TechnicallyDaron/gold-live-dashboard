@@ -30,7 +30,7 @@ function PnlBadge({ pnl }) {
   )
 }
 
-export default function PositionCard({ position }) {
+export default function PositionCard({ position, onRequestClose }) {
   const {
     asset, strike, type, expiration,
     premium_paid: premiumPaidLegacy, entry_premium: entryPremium,
@@ -52,7 +52,12 @@ export default function PositionCard({ position }) {
         <span className="position-card-exp">exp {expiration}</span>
       </div>
 
-      <PnlBadge pnl={pnl} />
+      <div className="position-card-pnl-row">
+        <PnlBadge pnl={pnl} />
+        <button type="button" className="position-card-close-btn" onClick={onRequestClose}>
+          Close
+        </button>
+      </div>
 
       {premiumPaid != null && (
         <div className="position-card-row">
