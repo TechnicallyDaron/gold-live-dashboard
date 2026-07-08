@@ -8,6 +8,7 @@ must be made in both places or, better, refactored into quant_core.
 """
 import math
 import os
+import time
 from datetime import date, datetime, timedelta, timezone
 
 import numpy as np
@@ -20,6 +21,7 @@ EDGE_WIN_RATE = float(os.getenv("EDGE_WIN_RATE", "0.65"))
 EDGE_MIN_N = int(os.getenv("EDGE_MIN_N", "15"))
 RISK_BUDGET_PCT = 3.5          # max entry→invalidation distance for VALID
 EXHAUSTION_Z = 2.5             # extreme-zone threshold
+CANDIDATES_TIME_BUDGET_SEC = float(os.getenv("CANDIDATES_TIME_BUDGET_SEC", "12"))
 
 
 # ── Shared computations ──────────────────────────────────────
@@ -549,9 +551,17 @@ def candidates() -> list:
     """On-demand velocity scan across the whole watchlist for the fast
     families (pullback, rsi2). Explicitly UNVALIDATED: these are leads
     for /lab, never signals. Auto-broadcasting them would poison the
-    track record."""
+    track record.
+
+    Runs in a threadpool, so a wall-clock deadline (not signal.alarm, which
+    only works on the main thread) caps the scan at ~12s and returns
+    whatever's been collected so far rather than hanging on a slow
+    watchlist."""
     out = []
+    deadline = time.monotonic() + CANDIDATES_TIME_BUDGET_SEC
     for name, d in qc.load_watchlist().items():
+        if time.monotonic() >= deadline:
+            break
         try:
             sig = _signals_today(d["ticker"])
         except Exception:
