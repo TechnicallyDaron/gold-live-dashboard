@@ -1,0 +1,95 @@
+.strategy-lab-skeleton {
+  height: 180px;
+  margin-bottom: 16px;
+}
+
+.strategy-lab {
+  margin-bottom: 16px;
+}
+
+.strategy-lab-title {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.strategy-lab-verdict {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  border-radius: var(--radius-sm);
+  border-left: 3px solid;
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bottom));
+  border: 1px solid var(--border);
+}
+
+.strategy-lab-verdict--assigned {
+  border-left-color: var(--long);
+}
+
+.strategy-lab-verdict--nothing {
+  border-left-color: var(--muted);
+}
+
+.strategy-lab-verdict-badge {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.strategy-lab-verdict-detail {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.strategy-lab-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.strategy-lab-result {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bottom));
+  border: 1px solid var(--border);
+}
+
+.strategy-lab-result-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.strategy-lab-result-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.strategy-lab-result-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.strategy-lab-result-tag--pass {
+  color: var(--long);
+  background: rgba(47, 191, 113, 0.12);
+  border: 1px solid var(--long);
+}
+
+.strategy-lab-result-tag--fail {
+  color: var(--muted);
+  background: rgba(151, 161, 179, 0.08);
+  border: 1px solid var(--border);
+}

@@ -1,0 +1,27 @@
+.reason-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reason-chip {
+  position: relative;
+  padding: 7px 10px 7px 22px;
+  border-radius: var(--radius-sm);
+  background: rgba(151, 161, 179, 0.06);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.reason-chip::before {
+  content: '•';
+  position: absolute;
+  left: 10px;
+  color: var(--watch);
+  font-weight: 700;
+}

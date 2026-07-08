@@ -3,10 +3,14 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useWatchlist } from '../lib/useWatchlist.js'
 import { useBias } from '../lib/useBias.js'
 import { useBacktestStrip } from '../lib/useBacktestStrip.js'
+import { useStrategyLab } from '../lib/useStrategyLab.js'
+import { useOptimizedEdge } from '../lib/useOptimizedEdge.js'
 import AssetSwitcher from '../components/AssetSwitcher.jsx'
 import VerdictBanner from '../components/VerdictBanner.jsx'
 import MetricsGrid from '../components/MetricsGrid.jsx'
 import ActionLevels from '../components/ActionLevels.jsx'
+import LiveEdgeSection from '../components/LiveEdgeSection.jsx'
+import StrategyLabSection from '../components/StrategyLabSection.jsx'
 import BacktestStrip from '../components/BacktestStrip.jsx'
 import FullBacktestSection from '../components/FullBacktestSection.jsx'
 import QuickPrompts from '../components/QuickPrompts.jsx'
@@ -37,6 +41,8 @@ export default function Bias() {
 
   const { data: bias, error: biasError, loading: biasLoading } = useBias(selected)
   const { results: backtestResults, loading: backtestLoading } = useBacktestStrip(selected)
+  const { data: strategyLab, loading: strategyLabLoading } = useStrategyLab(selected)
+  const { data: liveEdge, loading: liveEdgeLoading } = useOptimizedEdge(selected)
 
   return (
     <div className="bias-screen">
@@ -69,6 +75,8 @@ export default function Bias() {
           <VerdictBanner bias={bias} />
           <MetricsGrid bias={bias} unit={bias.unit} />
           <ActionLevels bias={bias} unit={bias.unit} />
+          <LiveEdgeSection data={liveEdge} loading={liveEdgeLoading} />
+          <StrategyLabSection data={strategyLab} loading={strategyLabLoading} />
           <BacktestStrip results={backtestResults} loading={backtestLoading} />
           <FullBacktestSection results={backtestResults} loading={backtestLoading} />
           <QuickPrompts key={selected} asset={selected} />
