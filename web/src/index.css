@@ -39,7 +39,8 @@ body {
 }
 
 #root {
-  min-height: 100svh;
+  height: 100svh;
+  height: var(--app-vh, 100svh);
   display: flex;
   flex-direction: column;
 }
