@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import CompactWatchlistCard from './CompactWatchlistCard.jsx'
 import './WatchlistGrid.css'
 
@@ -8,7 +8,7 @@ function chunk4(arr) {
   return pages
 }
 
-export default function WatchlistGrid({ watchlist, names, byAsset, loading }) {
+export default function WatchlistGrid({ watchlist, names, byAsset, loading, flashKeys }) {
   const scrollRef = useRef(null)
   const [page, setPage] = useState(0)
   const pages = chunk4(names)
@@ -18,6 +18,19 @@ export default function WatchlistGrid({ watchlist, names, byAsset, loading }) {
     if (!el || el.clientWidth === 0) return
     setPage(Math.round(el.scrollLeft / el.clientWidth))
   }
+
+  // Jump to whichever page holds a newly-flashing asset so the alert is
+  // actually visible, not silently pulsing on a page the user isn't on.
+  useEffect(() => {
+    if (!flashKeys || flashKeys.size === 0) return
+    const pi = pages.findIndex((p) => p.some((n) => flashKeys.has(n)))
+    const el = scrollRef.current
+    if (pi >= 0 && el) {
+      el.scrollTo({ left: pi * el.clientWidth, behavior: 'smooth' })
+      setPage(pi)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flashKeys])
 
   if (names.length === 0) {
     return (
@@ -46,6 +59,7 @@ export default function WatchlistGrid({ watchlist, names, byAsset, loading }) {
                   unit={watchlist[name].unit}
                   entry={byAsset?.[name]}
                   loading={!byAsset && loading}
+                  flash={flashKeys?.has(name)}
                 />
               ))}
             </div>

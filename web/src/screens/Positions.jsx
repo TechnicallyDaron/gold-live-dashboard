@@ -1,5 +1,6 @@
 import { usePositions } from '../lib/usePositions.js'
 import PositionCard from '../components/PositionCard.jsx'
+import VoltBell from '../components/VoltBell.jsx'
 import './Positions.css'
 
 export default function Positions() {
@@ -10,6 +11,7 @@ export default function Positions() {
     <div className="positions-screen">
       <header className="positions-header">
         <h1 className="positions-title">Positions</h1>
+        <VoltBell />
       </header>
 
       {error && !positions && (

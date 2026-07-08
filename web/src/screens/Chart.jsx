@@ -5,6 +5,7 @@ import { useHistory } from '../lib/useHistory.js'
 import AssetSwitcher from '../components/AssetSwitcher.jsx'
 import RangeToggle from '../components/RangeToggle.jsx'
 import LightweightChart from '../components/LightweightChart.jsx'
+import VoltBell from '../components/VoltBell.jsx'
 import './Chart.css'
 
 export default function Chart() {
@@ -36,6 +37,7 @@ export default function Chart() {
     <div className="chart-screen">
       <header className="chart-header">
         <h1 className="chart-title">Chart</h1>
+        <VoltBell />
       </header>
 
       {names.length > 0 && (

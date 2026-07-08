@@ -22,6 +22,12 @@
   letter-spacing: -0.2px;
 }
 
+.briefing-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .briefing-error {
   flex-shrink: 0;
   color: var(--short);

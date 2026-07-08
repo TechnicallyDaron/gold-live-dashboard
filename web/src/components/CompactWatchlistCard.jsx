@@ -13,7 +13,7 @@ function statusChip(bias) {
   return { icon: '😴', label: 'Quiet', color: 'var(--muted)' }
 }
 
-export default function CompactWatchlistCard({ name, unit, entry, loading }) {
+export default function CompactWatchlistCard({ name, unit, entry, loading, flash }) {
   const navigate = useNavigate()
 
   if (loading) {
@@ -28,10 +28,14 @@ export default function CompactWatchlistCard({ name, unit, entry, loading }) {
   const pctPositive = pct > 0
   const edgeColor = bias ? biasColorVar(bias.color) : 'var(--border)'
 
+  const classes = ['compact-card']
+  if (feedDown) classes.push('compact-card--down')
+  if (flash) classes.push('compact-card--flash')
+
   return (
     <button
       type="button"
-      className={feedDown ? 'compact-card compact-card--down' : 'compact-card'}
+      className={classes.join(' ')}
       style={!feedDown ? { borderLeftColor: edgeColor } : undefined}
       onClick={() => navigate(`/bias/${encodeURIComponent(name)}`)}
     >

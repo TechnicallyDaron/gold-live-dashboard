@@ -6,6 +6,10 @@
 }
 
 .chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
   margin-bottom: 16px;
 }
 

@@ -45,6 +45,8 @@ export const api = {
   ask: (asset, question) => postJSON('/api/ask', { asset, question }),
   sentiment: (asset) => request(`/api/sentiment/${encodeURIComponent(asset)}`),
   macroRadar: () => request('/api/macro-radar'),
+  notifications: (since = 0) => request(`/api/notifications?since=${since}`),
+  pushSubscribe: (subscription) => postJSON('/api/push/subscribe', subscription),
 }
 
 export { ApiError }
