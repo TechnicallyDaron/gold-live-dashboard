@@ -276,6 +276,21 @@ def theta_shield() -> list:
                 "horizon_days": horizon, "elapsed_days": elapsed,
                 "pct_exhausted": pct, "status": status,
             }
+            # ── Live PnL: REAL option premium only. Never spot-derived. ──
+            entry_prem = p.get("entry_premium") or p.get("entry")
+            live = None
+            if entry_prem and p.get("expiration") and p.get("strike") and p.get("type"):
+                live = qc.get_option_premium(ticker, p["expiration"],
+                                             float(p["strike"]), p["type"])
+            if live and entry_prem:
+                rec["pnl"] = {"live_premium": round(live, 2),
+                              "entry_premium": round(float(entry_prem), 2),
+                              "pnl_pct": round((live - float(entry_prem)) / float(entry_prem) * 100, 2),
+                              "source": "option_chain"}
+            else:
+                rec["pnl"] = {"live_premium": None, "entry_premium": entry_prem,
+                              "pnl_pct": None, "source": None,
+                              "note": "Option chain unreachable — PnL unavailable (never estimated from spot)."}
         except Exception:
             rec["shield"] = {"status": "DATA_ERROR"}
         out.append(rec)
@@ -475,3 +490,79 @@ def plain_state(b: dict):
             "interesting here. Waiting IS the move.",
             f"Nearest interesting level: ${b['arm_level']:,.2f} "
             f"({b['dist_to_arm_pct']:+.1f}% away)")
+
+
+# ── 9) CHART CARD RENDERER — dark, 30 candles, level overlays ──
+CHART_TOKENS = {"bg": "#0B0E14", "panel": "#10141F", "grid": "#1E2635",
+                "up": "#2FBF71", "down": "#E4574C", "text": "#C7CEDB",
+                "entry": "#39FF14", "stop": "#E4574C", "target": "#4DA6FF"}
+
+
+def render_chart_card(ticker: str, title: str, entry: float | None = None,
+                      stop: float | None = None, target: float | None = None,
+                      bars: int = 30) -> bytes:
+    """PNG bytes: last-N candles on charcoal with entry/stop/target lines."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    df = qc.fetch_history(ticker).tail(bars)
+    T = CHART_TOKENS
+    fig, ax = plt.subplots(figsize=(7.2, 4.2), dpi=150)
+    fig.patch.set_facecolor(T["bg"]); ax.set_facecolor(T["panel"])
+
+    xs = range(len(df))
+    for i, (_, r) in enumerate(df.iterrows()):
+        up = r["Price"] >= r["Open"]
+        c = T["up"] if up else T["down"]
+        ax.vlines(i, r["Low"], r["High"], color=c, linewidth=1)
+        lo, hi = sorted([r["Open"], r["Price"]])
+        ax.add_patch(plt.Rectangle((i - .32, lo), .64, max(hi - lo, 1e-9),
+                                   facecolor=c, edgecolor=c, linewidth=.5))
+    for level, key, label in ((entry, "entry", "ENTRY ZONE"),
+                              (stop, "stop", "INVALIDATION"),
+                              (target, "target", "TAKE PROFIT")):
+        if level:
+            ax.axhline(level, color=T[key], linewidth=1.6,
+                       linestyle="-" if key != "entry" else "--")
+            ax.text(len(df) - .5, level, f" {label} ${level:,.2f}",
+                    color=T[key], fontsize=7.5, va="bottom", ha="right",
+                    fontweight="bold")
+    ax.set_title(title, color=T["text"], fontsize=11, fontweight="bold",
+                 loc="left", pad=10)
+    ax.grid(color=T["grid"], linewidth=.5, alpha=.6)
+    ax.tick_params(colors=T["text"], labelsize=7)
+    for s in ax.spines.values():
+        s.set_color(T["grid"])
+    ax.set_xlim(-1, len(df))
+    ax.set_xticks([])
+    fig.tight_layout()
+    import io
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", facecolor=T["bg"])
+    plt.close(fig)
+    return buf.getvalue()
+
+
+# ── 10) CANDIDATES — breadth scan of the fast families, UNVALIDATED ──
+def candidates() -> list:
+    """On-demand velocity scan across the whole watchlist for the fast
+    families (pullback, rsi2). Explicitly UNVALIDATED: these are leads
+    for /lab, never signals. Auto-broadcasting them would poison the
+    track record."""
+    out = []
+    for name, d in qc.load_watchlist().items():
+        try:
+            sig = _signals_today(d["ticker"])
+        except Exception:
+            continue
+        for fam in ("pullback", "rsi2"):
+            side = sig.get(fam)
+            if side:
+                q = qc.get_quote(d["ticker"]) or {}
+                out.append({"asset": name, "ticker": d["ticker"], "family": fam,
+                            "family_name": qc.STRATEGIES[fam]["name"],
+                            "side": side, "price": q.get("price"),
+                            "validated": bool(assignment_for(name) and
+                                              assignment_for(name)["strategy"] == fam)})
+    return out

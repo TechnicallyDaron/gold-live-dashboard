@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 import requests
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 import json as _json
@@ -378,6 +378,136 @@ async def push_subscribe(request: Request):
             "push_configured": bool(os.getenv("VAPID_PRIVATE_KEY"))}
 
 
+@app.get("/api/candidates")
+def api_candidates():
+    return {"candidates": analytics.candidates(),
+            "note": "\u26A0\uFE0F UNVALIDATED leads from the fast families across the whole "
+                    "watchlist. Run /lab on an asset before treating any of these as a signal."}
+
+
+# ── JOURNAL: the permanent, honest audit log ──
+JOURNAL_FILE = "journal.json"
+
+
+def _load_journal():
+    try:
+        with open(JOURNAL_FILE) as f:
+            return _json.load(f)
+    except Exception:
+        return []
+
+
+class CloseBody(BaseModel):
+    exit_premium: float
+    exit_date: str | None = None          # YYYY-MM-DD, default today
+    thesis: str | None = None
+    rule_compliant: bool | None = None    # did the exit follow the plan?
+    notes: str | None = None
+
+
+@app.post("/api/positions/{pid}/close")
+def close_position(pid: str, body: CloseBody):
+    pos = qc.load_positions()
+    if pid not in pos:
+        raise HTTPException(status_code=404, detail=f"Position '{pid}' not found.")
+    p = pos.pop(pid)
+    entry_prem = float(p.get("entry_premium") or p.get("entry") or 0)
+    pnl_pct = (round((body.exit_premium - entry_prem) / entry_prem * 100, 2)
+               if entry_prem else None)
+    exit_d = body.exit_date or date.today().isoformat()
+    holding = None
+    try:
+        holding = (datetime.strptime(exit_d, "%Y-%m-%d").date() -
+                   datetime.strptime(p.get("entry_date", ""), "%Y-%m-%d").date()).days
+    except Exception:
+        pass
+    a = analytics.assignment_for(p.get("asset", ""))
+    verdict_now = None
+    try:
+        verdict_now = analytics.validate_rules(p.get("asset", ""), float(p.get("strike", 0)))["verdict"]
+    except Exception:
+        pass
+    entry = {
+        "id": pid, "asset": p.get("asset"), "type": p.get("type"),
+        "strike": p.get("strike"), "expiration": p.get("expiration"),
+        "entry_date": p.get("entry_date"), "exit_date": exit_d,
+        "entry_premium": entry_prem, "exit_premium": body.exit_premium,
+        "pnl_pct": pnl_pct, "holding_days": holding,
+        "strategy": (a or {}).get("strategy"),
+        "strategy_name": (a or {}).get("strategy_name"),
+        "verdict_at_close": verdict_now,
+        "thesis": body.thesis, "rule_compliant": body.rule_compliant,
+        "notes": body.notes, "logged_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    journal = _load_journal()
+    journal.append(entry)
+    with open(JOURNAL_FILE, "w") as f:
+        _json.dump(journal, f, indent=2)
+    with open("positions.json", "w") as f:
+        _json.dump(pos, f, indent=2)
+    notify("journal", f"\U0001F4D2 {entry['asset']} closed {pnl_pct:+.1f}%" if pnl_pct is not None
+           else f"\U0001F4D2 {entry['asset']} closed", body.notes or "Logged to the journal.")
+    return {"journal_entry": entry, "persistence_warning": PERSISTENCE_WARNING}
+
+
+@app.get("/api/journal")
+def api_journal():
+    """Entries + behavioral aggregates: the operator's mirror."""
+    j = _load_journal()
+    by_strat = {}
+    for e in j:
+        k = e.get("strategy_name") or "Unassigned"
+        by_strat.setdefault(k, []).append(e)
+    aggregates = {"total_trades": len(j)}
+    if j:
+        pnls = [e["pnl_pct"] for e in j if e.get("pnl_pct") is not None]
+        holds = [e["holding_days"] for e in j if e.get("holding_days") is not None]
+        rc = [e["rule_compliant"] for e in j if e.get("rule_compliant") is not None]
+        aggregates.update({
+            "win_rate": round(sum(1 for p in pnls if p > 0) / len(pnls), 4) if pnls else None,
+            "avg_pnl_pct": round(sum(pnls) / len(pnls), 2) if pnls else None,
+            "avg_holding_days": round(sum(holds) / len(holds), 1) if holds else None,
+            "rule_adherence": round(sum(1 for r in rc if r) / len(rc), 4) if rc else None,
+            "per_strategy": {k: {
+                "n": len(v),
+                "win_rate": round(sum(1 for e in v if (e.get("pnl_pct") or 0) > 0) / len(v), 4),
+                "avg_pnl_pct": round(sum(e.get("pnl_pct") or 0 for e in v) / len(v), 2),
+            } for k, v in by_strat.items()},
+        })
+    return {"entries": j, "aggregates": aggregates}
+
+
+# ── SUPABASE AUTH SCAFFOLD — zero new deps: verified over REST ──
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
+
+
+def get_current_user(authorization: str | None = Header(default=None)):
+    """FastAPI dependency. Verifies a Supabase JWT by asking Supabase.
+    Returns the user dict, or raises 401. File-mode fallback: if Supabase
+    isn't configured, the terminal stays single-operator (no auth wall)."""
+    if not (SUPABASE_URL and SUPABASE_ANON_KEY):
+        return {"id": "operator", "mode": "file-fallback"}
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Missing bearer token.")
+    token = authorization.split(" ", 1)[1]
+    try:
+        r = requests.get(f"{SUPABASE_URL}/auth/v1/user",
+                         headers={"apikey": SUPABASE_ANON_KEY,
+                                  "Authorization": f"Bearer {token}"}, timeout=8)
+    except Exception:
+        raise HTTPException(status_code=503, detail="Auth service unreachable.")
+    if r.status_code != 200:
+        raise HTTPException(status_code=401, detail="Invalid or expired session.")
+    return r.json()
+
+
+@app.get("/api/me")
+def me(user: dict = Depends(get_current_user)):
+    return {"user": {"id": user.get("id"), "email": user.get("email")},
+            "mode": user.get("mode", "supabase")}
+
+
 @app.get("/api/shield")
 def shield():
     return analytics.theta_shield()
@@ -416,7 +546,18 @@ def _agent_pass():
         body = (f"{h['asset']}{px}: your validated {h['strategy_name']} strategy "
                 f"just fired a {verb} setup. This is the exact pattern that made "
                 f"money in walk-forward testing \u2014 check the app for levels.")
-        tg_send(TELEGRAM_CHAT_ID, f"\U0001F3AF <b>PLAYBOOK SETUP LIVE</b>\n\n{body}")
+        caption = f"\U0001F3AF <b>PLAYBOOK SETUP LIVE</b>\n\n{body}"
+        sent_media = False
+        try:
+            b = qc.get_bias(h["ticker"])
+            png = analytics.render_chart_card(
+                h["ticker"], f"{h['asset']} \u2014 {h['strategy_name']} ({h['side'].upper()})",
+                entry=b.get("arm_level"), stop=b.get("invalidation"), target=b.get("target"))
+            sent_media = tg_send_photo(TELEGRAM_CHAT_ID, png, caption)
+        except Exception:
+            pass
+        if not sent_media:
+            tg_send(TELEGRAM_CHAT_ID, caption)
         notify("playbook", f"\U0001F3AF {h['asset']} setup live", body)
 
     # 2) Exhaustion: spent thrusts at extremes
@@ -430,10 +571,20 @@ def _agent_pass():
             if k in _agent_sent:
                 continue
             _agent_sent.add(k)
-            tg_send(TELEGRAM_CHAT_ID,
-                    f"\U0001F4B0 <b>TAKE PROFIT ALERT</b> \U0001F4B0\n\n"
-                    f"{name} has reached extreme overextension exhaustion at "
-                    f"${st['price']:,.2f}. Lock in options contract premium immediately.")
+            caption = (f"\U0001F4B0 <b>TAKE PROFIT ALERT</b> \U0001F4B0\n\n"
+                       f"{name} has reached extreme overextension exhaustion at "
+                       f"${st['price']:,.2f}. Lock in options contract premium immediately.")
+            sent_media = False
+            try:
+                b = qc.get_bias(d["ticker"])
+                png = analytics.render_chart_card(
+                    d["ticker"], f"{name} \u2014 EXHAUSTION at ${st['price']:,.2f}",
+                    stop=b.get("invalidation"), target=b.get("target"))
+                sent_media = tg_send_photo(TELEGRAM_CHAT_ID, png, caption)
+            except Exception:
+                pass
+            if not sent_media:
+                tg_send(TELEGRAM_CHAT_ID, caption)
             notify("exhaustion", f"\U0001F4B0 {name} looks exhausted",
                    f"The move in {name} is losing steam at ${st['price']:,.2f} after an "
                    f"extreme stretch \u2014 historically where thrusts stall. If you're "
@@ -493,6 +644,22 @@ def asset_inline_keyboard(action: str):
     if row:
         rows.append(row)
     return {"inline_keyboard": rows}
+
+
+def tg_send_photo(chat_id, png_bytes: bytes, caption: str) -> bool:
+    """Chart-card dispatch. Falls back to text if the media send fails."""
+    if not TELEGRAM_BOT_TOKEN:
+        return False
+    try:
+        r = requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto",
+            data={"chat_id": chat_id, "caption": caption[:1024], "parse_mode": "HTML"},
+            files={"photo": ("chart.png", png_bytes, "image/png")},
+            timeout=20,
+        )
+        return r.status_code == 200
+    except Exception:
+        return False
 
 
 def tg_answer_callback(callback_id):
@@ -666,6 +833,36 @@ def route_command(text: str) -> str:
             px = f" at ${h['price']:,.2f}" if h.get("price") else ""
             lines.append(f"\U0001F3AF <b>{h['asset']}</b>{px} \u2014 your validated "
                          f"<b>{h['strategy_name']}</b> is firing a {verb} ({h['side'].upper()}) setup.")
+        return "\n".join(lines)
+
+    if cmd == "/candidates":
+        cands = analytics.candidates()
+        if not cands:
+            return "\U0001F50E No fast-family setups anywhere on the board today."
+        lines = ["\U0001F50E <b>Velocity candidates</b> \u2014 \u26A0\uFE0F UNVALIDATED leads, not signals:"]
+        for c2 in cands[:12]:
+            tag = "\u2705 validated" if c2["validated"] else "\u26A0\uFE0F run /lab first"
+            px = f" ${c2['price']:,.2f}" if c2.get("price") else ""
+            lines.append(f"\u2022 <b>{c2['asset']}</b>{px} \u2014 {c2['family_name']} "
+                         f"{c2['side'].upper()} ({tag})")
+        return "\n".join(lines)
+
+    if cmd == "/journal":
+        import json as __j
+        try:
+            with open("journal.json") as f:
+                j = __j.load(f)
+        except Exception:
+            j = []
+        if not j:
+            return "\U0001F4D2 Journal is empty \u2014 close a position to write history."
+        pnls = [e["pnl_pct"] for e in j if e.get("pnl_pct") is not None]
+        wr = sum(1 for p in pnls if p > 0) / len(pnls) * 100 if pnls else 0
+        lines = [f"\U0001F4D2 <b>Journal</b> \u2014 {len(j)} trades | win rate {wr:.0f}%"]
+        for e in j[-5:]:
+            pp = f"{e['pnl_pct']:+.1f}%" if e.get("pnl_pct") is not None else "\u2014"
+            lines.append(f"\u2022 {e['asset']} {str(e.get('type','')).upper()} "
+                         f"{e.get('entry_date','?')} \u2192 {e.get('exit_date','?')}: <b>{pp}</b>")
         return "\n".join(lines)
 
     if cmd == "/playbook":

@@ -108,6 +108,27 @@ def _download_quote(ticker: str):
         return None
 
 
+def _download_option_premium(ticker: str, expiration: str, strike: float, opt_type: str):
+    t = yf.Ticker(ticker)
+    ch = t.option_chain(expiration)
+    tbl = ch.puts if opt_type.lower() == "put" else ch.calls
+    row = tbl[tbl["strike"] == float(strike)]
+    if len(row):
+        px = row["lastPrice"].iloc[0]
+        return float(px) if px and px > 0 else None
+    return None
+
+
+def get_option_premium(ticker: str, expiration: str, strike: float, opt_type: str):
+    """Live contract premium from the option chain. None = unavailable —
+    callers must show PNL UNAVAILABLE, never derive PnL from spot."""
+    key = f"opt:{ticker}:{expiration}:{strike}:{opt_type}"
+    try:
+        return _cached(key, 120, lambda: _download_option_premium(ticker, expiration, strike, opt_type))
+    except Exception:
+        return None
+
+
 # ── Public engine surface ────────────────────────────────────
 def get_quote(ticker: str):
     """{price, change, pct} or None. Never fabricates $0.00."""
