@@ -1,3 +1,4 @@
+import PnlBadge from './PnlBadge.jsx'
 import './PositionCard.css'
 
 function fmt(n) {
@@ -10,24 +11,6 @@ const SHIELD_LABEL = {
   OK: { text: 'On track', color: 'var(--long)' },
   WARN_80: { text: '80% of horizon used', color: 'var(--watch)' },
   CUT: { text: 'Horizon exhausted', color: 'var(--short)' },
-}
-
-function PnlBadge({ pnl }) {
-  if (!pnl) return null
-  if (pnl.pnl_pct == null) {
-    return (
-      <span className="pnl-badge pnl-badge--unavailable" title={pnl.note || 'PnL unavailable'}>
-        PNL UNAVAILABLE
-      </span>
-    )
-  }
-  const positive = pnl.pnl_pct > 0
-  return (
-    <span className={positive ? 'pnl-badge pnl-badge--positive' : 'pnl-badge pnl-badge--negative'}>
-      {positive ? '+' : ''}
-      {pnl.pnl_pct.toFixed(1)}%
-    </span>
-  )
 }
 
 export default function PositionCard({ position, onRequestClose }) {
@@ -53,7 +36,7 @@ export default function PositionCard({ position, onRequestClose }) {
       </div>
 
       <div className="position-card-pnl-row">
-        <PnlBadge pnl={pnl} />
+        <PnlBadge pnlPct={pnl?.pnl_pct} note={pnl?.note} />
         <button type="button" className="position-card-close-btn" onClick={onRequestClose}>
           Close
         </button>
