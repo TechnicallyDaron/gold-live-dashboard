@@ -1,0 +1,64 @@
+.bs-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.55);
+  animation: bs-fade-in 0.15s ease-out;
+}
+
+@keyframes bs-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.bs-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bottom));
+  border-top: 1px solid var(--border);
+  border-radius: 20px 20px 0 0;
+  padding: 10px 20px calc(env(safe-area-inset-bottom) + 20px);
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.4);
+  animation: bs-slide-up 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  touch-action: none;
+}
+
+@keyframes bs-slide-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.bs-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border);
+  margin: 4px auto 14px;
+  flex-shrink: 0;
+}
+
+.bs-title {
+  flex-shrink: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 16px;
+}
+
+.bs-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}

@@ -1,6 +1,9 @@
+import { useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { biasColorVar } from '../lib/colors.js'
 import './CompactWatchlistCard.css'
+
+const LONG_PRESS_MS = 650
 
 function statusChip(bias) {
   if (!bias) return { icon: '😴', label: 'Quiet', color: 'var(--muted)' }
@@ -13,8 +16,10 @@ function statusChip(bias) {
   return { icon: '😴', label: 'Quiet', color: 'var(--muted)' }
 }
 
-export default function CompactWatchlistCard({ name, unit, entry, loading, flash }) {
+export default function CompactWatchlistCard({ name, unit, entry, loading, flash, onLongPress }) {
   const navigate = useNavigate()
+  const pressTimer = useRef(null)
+  const longPressFired = useRef(false)
 
   if (loading) {
     return <div className="skeleton compact-card-skeleton" />
@@ -32,12 +37,34 @@ export default function CompactWatchlistCard({ name, unit, entry, loading, flash
   if (feedDown) classes.push('compact-card--down')
   if (flash) classes.push('compact-card--flash')
 
+  const handleTouchStart = () => {
+    longPressFired.current = false
+    pressTimer.current = setTimeout(() => {
+      longPressFired.current = true
+      onLongPress?.(name)
+    }, LONG_PRESS_MS)
+  }
+  const clearPressTimer = () => {
+    if (pressTimer.current) clearTimeout(pressTimer.current)
+  }
+  const handleClick = () => {
+    if (longPressFired.current) {
+      longPressFired.current = false
+      return
+    }
+    navigate(`/bias/${encodeURIComponent(name)}`)
+  }
+
   return (
     <button
       type="button"
       className={classes.join(' ')}
       style={!feedDown ? { borderLeftColor: edgeColor } : undefined}
-      onClick={() => navigate(`/bias/${encodeURIComponent(name)}`)}
+      onClick={handleClick}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={clearPressTimer}
+      onTouchMove={clearPressTimer}
+      onTouchCancel={clearPressTimer}
     >
       <span className="compact-card-name">{name}</span>
       {feedDown ? (

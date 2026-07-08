@@ -1,0 +1,99 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.field-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.field-input,
+.field-select {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--panel-top);
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.field-input::placeholder {
+  color: var(--muted);
+}
+
+.field-input:focus,
+.field-select:focus {
+  outline: none;
+  border-color: var(--bullion);
+}
+
+.field-row {
+  display: flex;
+  gap: 10px;
+}
+
+.field-row .field {
+  flex: 1;
+}
+
+.field-toggle-row {
+  display: flex;
+  gap: 8px;
+}
+
+.field-toggle {
+  flex: 1;
+  padding: 11px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--panel-top);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.field-toggle--active-long {
+  background: rgba(47, 191, 113, 0.15);
+  border-color: var(--long);
+  color: var(--long);
+}
+
+.field-toggle--active-short {
+  background: rgba(228, 87, 76, 0.15);
+  border-color: var(--short);
+  color: var(--short);
+}
+
+.field-error {
+  color: var(--short);
+  font-size: 12px;
+  margin: -6px 0 14px;
+}
+
+.field-submit {
+  width: 100%;
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--bullion);
+  background: rgba(232, 181, 74, 0.12);
+  color: var(--bullion);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.field-submit:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

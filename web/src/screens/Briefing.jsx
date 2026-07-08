@@ -5,6 +5,8 @@ import { useMacro } from '../lib/useMacro.js'
 import { useMacroRadar } from '../lib/useMacroRadar.js'
 import { useNotifications } from '../lib/useNotifications.js'
 import { matchAssetKey } from '../lib/matchAsset.js'
+import { api } from '../lib/api.js'
+import { showToast } from '../lib/toast.js'
 import HealthDot from '../components/HealthDot.jsx'
 import TickerTape from '../components/TickerTape.jsx'
 import MacroHijackBanner from '../components/MacroHijackBanner.jsx'
@@ -13,15 +15,19 @@ import WatchlistGrid from '../components/WatchlistGrid.jsx'
 import QuickLookModal from '../components/QuickLookModal.jsx'
 import MicroChart from '../components/MicroChart.jsx'
 import VoltBell from '../components/VoltBell.jsx'
+import ConfirmDialog from '../components/ConfirmDialog.jsx'
+import WatchlistAddForm from '../components/WatchlistAddForm.jsx'
 import './Briefing.css'
 
 export default function Briefing() {
-  const { watchlist, error: watchlistError } = useWatchlist()
+  const { watchlist, error: watchlistError, setWatchlist } = useWatchlist()
   const { data: macroEvents, loading: macroLoading } = useMacro()
   const { data: radar } = useMacroRadar()
   const { items: notifications } = useNotifications()
   const [quickLook, setQuickLook] = useState(null)
   const [flashKeys, setFlashKeys] = useState(new Set())
+  const [removeTarget, setRemoveTarget] = useState(null)
+  const [showAddForm, setShowAddForm] = useState(false)
   const maxTsSeenRef = useRef(null)
 
   const names = watchlist ? Object.keys(watchlist) : []
@@ -55,6 +61,19 @@ export default function Briefing() {
     }
   }, [notifications, watchlist])
 
+  const confirmRemove = async () => {
+    const name = removeTarget
+    setRemoveTarget(null)
+    try {
+      const res = await api.removeWatchlist(name)
+      setWatchlist(res.watchlist)
+      showToast(`Removed ${name} from your watchlist`, 'success')
+      if (res.persistence_warning) showToast(res.persistence_warning, 'warning')
+    } catch (err) {
+      showToast(err.message, 'error')
+    }
+  }
+
   return (
     <div className="briefing">
       {hijack ? (
@@ -83,6 +102,8 @@ export default function Briefing() {
         byAsset={byAsset}
         loading={dataLoading}
         flashKeys={flashKeys}
+        onLongPress={setRemoveTarget}
+        onAddClick={() => setShowAddForm(true)}
       />
 
       <MacroWeekTrack events={macroEvents} loading={macroLoading} />
@@ -92,6 +113,23 @@ export default function Briefing() {
           symbol={quickLook.symbol}
           quote={quickLook.quote}
           onClose={() => setQuickLook(null)}
+        />
+      )}
+
+      {removeTarget && (
+        <ConfirmDialog
+          title={`Remove ${removeTarget}?`}
+          body="You can add it back any time from the + tile."
+          confirmLabel="Remove"
+          onConfirm={confirmRemove}
+          onCancel={() => setRemoveTarget(null)}
+        />
+      )}
+
+      {showAddForm && (
+        <WatchlistAddForm
+          onClose={() => setShowAddForm(false)}
+          onSaved={(wl) => setWatchlist(wl)}
         />
       )}
     </div>

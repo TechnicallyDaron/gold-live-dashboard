@@ -1,11 +1,15 @@
-import { usePositions } from '../lib/usePositions.js'
+import { useState } from 'react'
+import { useShield } from '../lib/useShield.js'
+import { useWatchlist } from '../lib/useWatchlist.js'
 import PositionCard from '../components/PositionCard.jsx'
 import VoltBell from '../components/VoltBell.jsx'
+import PositionForm from '../components/PositionForm.jsx'
 import './Positions.css'
 
 export default function Positions() {
-  const { positions, error } = usePositions()
-  const ids = positions ? Object.keys(positions) : []
+  const { positions, error, refresh } = useShield()
+  const { watchlist } = useWatchlist()
+  const [showForm, setShowForm] = useState(false)
 
   return (
     <div className="positions-screen">
@@ -13,6 +17,10 @@ export default function Positions() {
         <h1 className="positions-title">Positions</h1>
         <VoltBell />
       </header>
+
+      <button type="button" className="positions-log-btn" onClick={() => setShowForm(true)}>
+        + Log Position
+      </button>
 
       {error && !positions && (
         <div className="positions-error">Could not load positions. Pull to retry.</div>
@@ -23,12 +31,19 @@ export default function Positions() {
           <div key={i} className="skeleton positions-card-skeleton" />
         ))}
 
-      {positions && ids.length === 0 && (
+      {positions && positions.length === 0 && (
         <p className="positions-empty">No positions on file.</p>
       )}
 
-      {positions &&
-        ids.map((id) => <PositionCard key={id} position={positions[id]} />)}
+      {positions && positions.map((p) => <PositionCard key={p.id} position={p} />)}
+
+      {showForm && (
+        <PositionForm
+          watchlist={watchlist || {}}
+          onClose={() => setShowForm(false)}
+          onSaved={refresh}
+        />
+      )}
     </div>
   )
 }

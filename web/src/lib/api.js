@@ -30,6 +30,10 @@ function postJSON(path, body) {
   })
 }
 
+function del(path) {
+  return request(path, { method: 'DELETE' })
+}
+
 export const api = {
   health: () => request('/api/health'),
   watchlist: () => request('/api/watchlist'),
@@ -47,6 +51,10 @@ export const api = {
   macroRadar: () => request('/api/macro-radar'),
   notifications: (since = 0) => request(`/api/notifications?since=${since}`),
   pushSubscribe: (subscription) => postJSON('/api/push/subscribe', subscription),
+  shield: () => request('/api/shield'),
+  addPosition: (body) => postJSON('/api/positions', body),
+  addWatchlist: (body) => postJSON('/api/watchlist', body),
+  removeWatchlist: (name) => del(`/api/watchlist/${encodeURIComponent(name)}`),
 }
 
 export { ApiError }

@@ -1,17 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
 import CompactWatchlistCard from './CompactWatchlistCard.jsx'
+import AddTile from './AddTile.jsx'
 import './WatchlistGrid.css'
 
-function chunk4(arr) {
+const ADD_TILE = { __addTile: true }
+
+function chunk4(items) {
   const pages = []
-  for (let i = 0; i < arr.length; i += 4) pages.push(arr.slice(i, i + 4))
+  for (let i = 0; i < items.length; i += 4) pages.push(items.slice(i, i + 4))
   return pages
 }
 
-export default function WatchlistGrid({ watchlist, names, byAsset, loading, flashKeys }) {
+export default function WatchlistGrid({
+  watchlist, names, byAsset, loading, flashKeys, onLongPress, onAddClick,
+}) {
   const scrollRef = useRef(null)
   const [page, setPage] = useState(0)
-  const pages = chunk4(names)
+  const pages = chunk4([...names, ADD_TILE])
 
   const onScroll = () => {
     const el = scrollRef.current
@@ -23,7 +28,7 @@ export default function WatchlistGrid({ watchlist, names, byAsset, loading, flas
   // actually visible, not silently pulsing on a page the user isn't on.
   useEffect(() => {
     if (!flashKeys || flashKeys.size === 0) return
-    const pi = pages.findIndex((p) => p.some((n) => flashKeys.has(n)))
+    const pi = pages.findIndex((p) => p.some((n) => typeof n === 'string' && flashKeys.has(n)))
     const el = scrollRef.current
     if (pi >= 0 && el) {
       el.scrollTo({ left: pi * el.clientWidth, behavior: 'smooth' })
@@ -50,18 +55,23 @@ export default function WatchlistGrid({ watchlist, names, byAsset, loading, flas
     <div className="watchlist-grid-wrap">
       <div className="wg-inner">
         <div className="wg-scroll" ref={scrollRef} onScroll={onScroll}>
-          {pages.map((pageNames, pi) => (
+          {pages.map((pageItems, pi) => (
             <div className="wg-page" key={pi}>
-              {pageNames.map((name) => (
-                <CompactWatchlistCard
-                  key={name}
-                  name={name}
-                  unit={watchlist[name].unit}
-                  entry={byAsset?.[name]}
-                  loading={!byAsset && loading}
-                  flash={flashKeys?.has(name)}
-                />
-              ))}
+              {pageItems.map((item) =>
+                item === ADD_TILE ? (
+                  <AddTile key="add-tile" onClick={onAddClick} />
+                ) : (
+                  <CompactWatchlistCard
+                    key={item}
+                    name={item}
+                    unit={watchlist[item].unit}
+                    entry={byAsset?.[item]}
+                    loading={!byAsset && loading}
+                    flash={flashKeys?.has(item)}
+                    onLongPress={onLongPress}
+                  />
+                )
+              )}
             </div>
           ))}
         </div>

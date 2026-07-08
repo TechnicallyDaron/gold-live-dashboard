@@ -5,6 +5,7 @@ import Bias from './screens/Bias.jsx'
 import Chart from './screens/Chart.jsx'
 import News from './screens/News.jsx'
 import Positions from './screens/Positions.jsx'
+import ToastHost from './components/ToastHost.jsx'
 import './App.css'
 
 function App() {
@@ -23,6 +24,7 @@ function App() {
         </Routes>
       </main>
       <TabBar />
+      <ToastHost />
     </>
   )
 }

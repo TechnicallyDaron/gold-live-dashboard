@@ -13,6 +13,21 @@
   letter-spacing: -0.3px;
 }
 
+.positions-log-btn {
+  display: block;
+  width: 100%;
+  padding: 13px;
+  margin-bottom: 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--bullion);
+  background: rgba(232, 181, 74, 0.1);
+  color: var(--bullion);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
 .positions-card-skeleton {
   height: 150px;
   margin-bottom: 12px;

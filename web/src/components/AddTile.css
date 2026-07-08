@@ -1,0 +1,27 @@
+.add-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius);
+  background: transparent;
+  border: 1px dashed var(--border);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.add-tile-plus {
+  font-size: 28px;
+  font-weight: 400;
+  color: var(--bullion);
+  line-height: 1;
+}
+
+.add-tile-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}

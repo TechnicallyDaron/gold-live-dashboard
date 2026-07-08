@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { api } from './api.js'
 
-// Watchlist composition barely changes — fetch once, not polled.
+// Watchlist composition barely changes — fetch once, not polled. Callers
+// that mutate it (add/remove) get back the server's updated watchlist
+// directly in the response, so `setWatchlist` lets them apply it in place
+// instead of forcing a refetch.
 export function useWatchlist() {
   const [watchlist, setWatchlist] = useState(null)
   const [error, setError] = useState(null)
@@ -17,5 +20,5 @@ export function useWatchlist() {
     }
   }, [])
 
-  return { watchlist, error }
+  return { watchlist, error, setWatchlist }
 }
