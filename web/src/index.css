@@ -23,6 +23,15 @@
   box-sizing: border-box;
 }
 
+/* iOS Safari zooms the viewport on focus if an input's computed font-size is
+   under 16px. This is a floor for any input/select/textarea app-wide;
+   component styles may still set a larger size. */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
 html,
 body {
   margin: 0;

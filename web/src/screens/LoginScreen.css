@@ -65,7 +65,7 @@
   border: 1px solid var(--border);
   background: var(--ink);
   color: var(--text);
-  font-size: 14px;
+  font-size: 16px;
   font-family: inherit;
   text-align: center;
 }
