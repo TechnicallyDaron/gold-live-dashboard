@@ -12,15 +12,43 @@ function chunk4(items) {
   return pages
 }
 
-// Neutral/no-trade bias (gray = "⚪ NO TRADE"), not playbook-firing, and not
-// a current screener hit — nothing about this asset needs attention right
-// now, so it collapses out of the paginated grid.
-function isQuiet(name, watchlist, byAsset, screenerTickers) {
+// Tiers 1-4 are "active" — an asset qualifying for any of them always
+// belongs in the paginated grid, however many there are. Tiers 5-7 only
+// matter for ranking which quiet assets get promoted to fill the grid up
+// to its 4-card minimum when there aren't enough active ones.
+function isActiveTier(name, watchlist, byAsset, screenerTickers) {
   const bias = byAsset?.[name]?.bias
-  const isNeutral = !bias || bias.color === 'gray'
-  const isFiring = !!(bias?.assigned_strategy && bias?.signaling_today)
   const ticker = (watchlist[name]?.ticker || name).toUpperCase()
-  return isNeutral && !isFiring && !screenerTickers.has(ticker)
+  const firing = !!(bias?.assigned_strategy && bias?.signaling_today)
+  const inScreener = screenerTickers.has(ticker)
+  const setupLive = bias?.color === 'green' || bias?.color === 'red'
+  const watch = bias?.color === 'orange'
+  return firing || inScreener || setupLive || watch
+}
+
+// Full 7-tier sort key (lower sorts first). 1-5 are boolean gates (0 = it
+// qualifies for that tier); 6 breaks remaining ties by size of today's
+// move; 7 falls back to the asset's original watchlist position.
+function rankKey(name, index, watchlist, byAsset, screenerTickers) {
+  const bias = byAsset?.[name]?.bias
+  const ticker = (watchlist[name]?.ticker || name).toUpperCase()
+  const pct = byAsset?.[name]?.quote?.pct ?? 0
+  return [
+    bias?.assigned_strategy && bias?.signaling_today ? 0 : 1, // 1: firing today
+    screenerTickers.has(ticker) ? 0 : 1, // 2: screener hit
+    bias?.color === 'green' || bias?.color === 'red' ? 0 : 1, // 3: setup live
+    bias?.color === 'orange' ? 0 : 1, // 4: watch state
+    bias?.assigned_strategy ? 0 : 1, // 5: playbook-assigned, even if quiet
+    -Math.abs(pct), // 6: largest |day change %| first
+    index, // 7: original watchlist order
+  ]
+}
+
+function compareRank(a, b) {
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return a[i] - b[i]
+  }
+  return 0
 }
 
 const EMPTY_SET = new Set()
@@ -33,16 +61,33 @@ export default function WatchlistGrid({
   const [page, setPage] = useState(0)
   const [quietOpen, setQuietOpen] = useState(false)
 
-  // Can't classify quiet vs active until bias data has loaded at least
-  // once — until then, everything renders in the active grid as loading
-  // skeletons (matching prior behavior) rather than guessing.
+  // Can't rank until bias data has loaded at least once — until then,
+  // everything renders in the active grid as loading skeletons (matching
+  // prior behavior) rather than guessing.
   const canClassify = !!byAsset
-  const activeNames = canClassify
-    ? names.filter((n) => !isQuiet(n, watchlist, byAsset, screenerTickers))
-    : names
-  const quietNames = canClassify
-    ? names.filter((n) => isQuiet(n, watchlist, byAsset, screenerTickers))
-    : []
+  let activeNames = names
+  let quietNames = []
+
+  if (canClassify) {
+    const ranked = names
+      .map((n, i) => ({ name: n, key: rankKey(n, i, watchlist, byAsset, screenerTickers) }))
+      .sort((a, b) => compareRank(a.key, b.key))
+      .map((r) => r.name)
+    const activeTierCount = ranked.filter((n) => isActiveTier(n, watchlist, byAsset, screenerTickers)).length
+
+    if (activeTierCount > 4) {
+      // More than 4 assets genuinely need attention — show all of them,
+      // paginated; only the truly quiet ones (tiers 5-7) collapse.
+      activeNames = ranked.filter((n) => isActiveTier(n, watchlist, byAsset, screenerTickers))
+      quietNames = ranked.filter((n) => !isActiveTier(n, watchlist, byAsset, screenerTickers))
+    } else {
+      // Fewer than 4 (or zero) active assets — the grid never goes below
+      // 4 cards (or the full watchlist, if smaller): top-ranked quiet
+      // assets get promoted to fill it, so it's never empty on a quiet day.
+      activeNames = ranked.slice(0, 4)
+      quietNames = ranked.slice(4)
+    }
+  }
 
   const pages = chunk4([...activeNames, ADD_TILE])
 
