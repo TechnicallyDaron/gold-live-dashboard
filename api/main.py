@@ -107,6 +107,37 @@ def _web_push_all(evt):
 # =====================================================================
 # JSON API — the PWA's data contract
 # =====================================================================
+# ── SUPABASE AUTH SCAFFOLD — zero new deps: verified over REST ──
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
+
+
+def get_current_user(authorization: str | None = Header(default=None)):
+    """FastAPI dependency. File-mode fallback FIRST: if Supabase env vars
+    are absent (both None, empty, or not set), return file-fallback. Only
+    demand bearer token if Supabase is actually configured."""
+    if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+        return {"id": "operator", "mode": "file-fallback"}
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Missing bearer token.")
+    token = authorization.split(" ", 1)[1]
+    try:
+        r = requests.get(f"{SUPABASE_URL}/auth/v1/user",
+                         headers={"apikey": SUPABASE_ANON_KEY,
+                                  "Authorization": f"Bearer {token}"}, timeout=8)
+    except Exception:
+        raise HTTPException(status_code=503, detail="Auth service unreachable.")
+    if r.status_code != 200:
+        raise HTTPException(status_code=401, detail="Invalid or expired session.")
+    return r.json()
+
+
+@app.get("/api/me")
+def me(user: dict = Depends(get_current_user)):
+    return {"user": {"id": user.get("id"), "email": user.get("email")},
+            "mode": user.get("mode", "supabase")}
+
+
 @app.get("/api/health")
 def health():
     return {
@@ -118,13 +149,13 @@ def health():
 
 
 @app.get("/api/watchlist")
-def watchlist():
-    return qc.load_watchlist()
+def watchlist(user: dict = Depends(get_current_user)):
+    return store.get_watchlist(store.resolve_user(user))
 
 
 @app.get("/api/positions")
-def positions():
-    return qc.load_positions()
+def positions(user: dict = Depends(get_current_user)):
+    return store.get_positions(store.resolve_user(user))
 
 
 @app.get("/api/quote/{asset}")
@@ -296,35 +327,7 @@ def strategy_lab(asset: str):
         raise HTTPException(status_code=502, detail=f"Feed down for {asset}")
 
 
-# ── SUPABASE AUTH SCAFFOLD — zero new deps: verified over REST ──
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 
-
-def get_current_user(authorization: str | None = Header(default=None)):
-    """FastAPI dependency. File-mode fallback FIRST: if Supabase env vars
-    are absent (both None, empty, or not set), return file-fallback. Only
-    demand bearer token if Supabase is actually configured."""
-    if not SUPABASE_URL or not SUPABASE_ANON_KEY:
-        return {"id": "operator", "mode": "file-fallback"}
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(status_code=401, detail="Missing bearer token.")
-    token = authorization.split(" ", 1)[1]
-    try:
-        r = requests.get(f"{SUPABASE_URL}/auth/v1/user",
-                         headers={"apikey": SUPABASE_ANON_KEY,
-                                  "Authorization": f"Bearer {token}"}, timeout=8)
-    except Exception:
-        raise HTTPException(status_code=503, detail="Auth service unreachable.")
-    if r.status_code != 200:
-        raise HTTPException(status_code=401, detail="Invalid or expired session.")
-    return r.json()
-
-
-@app.get("/api/me")
-def me(user: dict = Depends(get_current_user)):
-    return {"user": {"id": user.get("id"), "email": user.get("email")},
-            "mode": user.get("mode", "supabase")}
 
 
 PERSISTENCE_WARNING = ("Saved to the live service. NOTE: Railway's filesystem resets on "
@@ -525,8 +528,8 @@ def api_journal(user: dict = Depends(get_current_user)):
 
 
 @app.get("/api/shield")
-def shield():
-    return analytics.theta_shield()
+def shield(user: dict = Depends(get_current_user)):
+    return analytics.theta_shield(store.get_positions(store.resolve_user(user)))
 
 
 @app.get("/api/exhaustion/{asset}")
@@ -719,6 +722,10 @@ async def _run_daily_screener():
     return hits
 
 
+def _esc(s) -> str:
+    return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 def _fmt_lab_book(res: dict) -> str:
     lines = ["\U0001F9EA <b>Playbook expansion complete.</b>"]
     if res["new_assignments"]:
@@ -738,7 +745,7 @@ def _fmt_lab_book(res: dict) -> str:
     if res["nothing_validated"]:
         lines.append(f"\n\U0001F6AB Rejected ({len(res['nothing_validated'])}):")
         for f in res["nothing_validated"][:8]:
-            lines.append(f"\u2022 {f['asset']}: {f['reason']}")
+            lines.append(f"\u2022 {_esc(f['asset'])}: {_esc(f['reason'])}")
     if res["already_assigned"]:
         lines.append(f"\n\U0001F512 Standing: {', '.join(res['already_assigned'])}")
     if res.get("ran_out_of_time"):
@@ -889,7 +896,16 @@ def tg_send(chat_id, text: str, reply_markup: dict | None = None) -> bool:
             f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
             json=payload, timeout=10,
         )
-        return r.status_code == 200
+        if r.status_code == 200:
+            return True
+        # HTML parse rejection (raw < > & in dynamic text) — degrade to
+        # plain text rather than vanish. A plain message beats silence.
+        payload.pop("parse_mode", None)
+        r2 = requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+            json=payload, timeout=10,
+        )
+        return r2.status_code == 200
     except Exception:
         return False
 

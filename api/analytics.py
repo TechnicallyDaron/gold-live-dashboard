@@ -232,13 +232,14 @@ def validate_rules(asset: str, entry: float, side: str | None = None) -> dict:
 
 
 # ── 4) THETA SHIELD ──────────────────────────────────────────
-def theta_shield() -> list:
+def theta_shield(positions: dict | None = None) -> list:
     """Volatility-adjusted time horizon per position. Horizon = days the
     ATR needs to cover the distance to target (×1.5 buffer), capped by
-    80% of days-to-expiry and any explicit time_stop."""
+    80% of days-to-expiry and any explicit time_stop. Pass positions to
+    scope per-user; defaults to the operator's book."""
     out = []
     today = date.today()
-    for pid, p in qc.load_positions().items():
+    for pid, p in (positions if positions is not None else qc.load_positions()).items():
         rec = {"id": pid, **p}
         try:
             ticker, _, _ = qc.resolve_ticker(str(p.get("asset", "")))

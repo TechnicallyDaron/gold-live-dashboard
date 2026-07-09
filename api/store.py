@@ -26,11 +26,14 @@ def resolve_user(user: dict | None) -> str | None:
 
 # ── WATCHLIST ────────────────────────────────────────────────
 def get_watchlist(user_id: str | None) -> dict:
+    """DB mode: the user's rows are the truth — an empty watchlist is EMPTY,
+    never silently backfilled with someone else's book. File fallback exists
+    only when the database itself is unconfigured."""
     if user_id:
-        rows = db.select("watchlists", {"user_id": user_id}, order="id.asc")
-        if rows:
-            return {r["display_name"]: {"ticker": r["ticker"], "name": r["display_name"],
-                                        "unit": r.get("unit") or "/sh"} for r in rows}
+        rows = db.select("watchlists", {"user_id": user_id},
+                         order="priority.asc,id.asc")
+        return {r["display_name"]: {"ticker": r["ticker"], "name": r["display_name"],
+                                    "unit": r.get("unit") or "/sh"} for r in rows}
     with open("watchlist.json") as f:
         return json.load(f)
 
