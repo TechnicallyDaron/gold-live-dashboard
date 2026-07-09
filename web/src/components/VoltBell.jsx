@@ -14,9 +14,15 @@ function relativeTime(ts) {
 }
 
 export default function VoltBell() {
-  const { items, unseenCount, markSeen } = useNotifications()
+  const { items, lastSeen, markSeen } = useNotifications()
   const [open, setOpen] = useState(false)
   const [mutedNote, setMutedNote] = useState(null)
+
+  // Journal entries (position-closed events) already have their own home
+  // in the Positions journal — surfacing them again here is just noise.
+  // Filtered client-side so the badge count and panel list always agree.
+  const visibleItems = items.filter((n) => n.kind !== 'journal')
+  const unseenCount = visibleItems.filter((n) => n.ts > lastSeen).length
 
   const toggle = () => {
     setOpen((o) => {
@@ -51,10 +57,10 @@ export default function VoltBell() {
           <div className="volt-bell-panel">
             <span className="volt-bell-panel-title">Notifications</span>
             {mutedNote && <p className="volt-bell-muted-note">{mutedNote}</p>}
-            {items.length === 0 && (
+            {visibleItems.length === 0 && (
               <p className="volt-bell-empty">Nothing yet — the agent checks every 20 minutes.</p>
             )}
-            {items.map((n, i) => (
+            {visibleItems.map((n, i) => (
               <div key={i} className="volt-bell-item">
                 <span className="volt-bell-item-title">{n.title}</span>
                 <p className="volt-bell-item-text">{n.body}</p>

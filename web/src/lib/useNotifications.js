@@ -48,5 +48,5 @@ export function useNotifications() {
 
   const unseenCount = items.filter((n) => n.ts > lastSeen).length
 
-  return { items, unseenCount, markSeen }
+  return { items, unseenCount, lastSeen, markSeen }
 }
