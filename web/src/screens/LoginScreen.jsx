@@ -159,6 +159,10 @@ export default function LoginScreen({ dissolving = false, onDissolved }) {
           </>
         )}
       </div>
+
+      <p className="portal-disclaimer">
+        Educational tool. Not financial advice. Trade at your own risk.
+      </p>
     </div>
   )
 }
