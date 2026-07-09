@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import TabBar from './components/TabBar.jsx'
 import Briefing from './screens/Briefing.jsx'
 import Bias from './screens/Bias.jsx'
@@ -63,7 +63,8 @@ function App() {
     <>
       <main className="app-content">
         <Routes>
-          <Route path="/" element={<Briefing />} />
+          <Route path="/hub" element={<Briefing />} />
+          <Route path="/" element={<Navigate to="/hub" replace />} />
           <Route path="/bias" element={<Bias />} />
           <Route path="/bias/:asset" element={<Bias />} />
           <Route path="/chart" element={<Chart />} />

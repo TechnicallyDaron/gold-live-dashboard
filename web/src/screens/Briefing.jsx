@@ -36,7 +36,7 @@ export default function Briefing() {
 
   const hijack = radar?.hijack && radar?.nearest
 
-  // Flash the matching Briefing card when a NEW playbook/exhaustion event
+  // Flash the matching HUB card when a NEW playbook/exhaustion event
   // arrives while this screen is mounted. Baseline on first load so the
   // whole board doesn't flash for a backlog of already-seen history.
   useEffect(() => {
@@ -84,7 +84,7 @@ export default function Briefing() {
       )}
 
       <header className="briefing-header">
-        <h1 className="briefing-title">Briefing</h1>
+        <h1 className="briefing-title">HUB</h1>
         <div className="briefing-header-right">
           <HealthDot />
           <VoltBell />
