@@ -7,10 +7,12 @@ import Chart from './screens/Chart.jsx'
 import News from './screens/News.jsx'
 import Positions from './screens/Positions.jsx'
 import LoginScreen from './screens/LoginScreen.jsx'
+import SetPasswordScreen from './screens/SetPasswordScreen.jsx'
 import OnboardingBaskets from './screens/OnboardingBaskets.jsx'
 import ToastHost from './components/ToastHost.jsx'
 import { useAuth } from './lib/useAuth.js'
 import { useWatchlist } from './lib/useWatchlist.js'
+import { useAuthHashHandler } from './lib/useAuthHashHandler.js'
 import { isOnboardingSkipped } from './lib/onboarding.js'
 import './App.css'
 
@@ -18,6 +20,7 @@ function App() {
   const { gateEnabled, ready, signedIn, user } = useAuth()
   const { watchlist } = useWatchlist(!gateEnabled || (ready && signedIn))
   const [onboardingDone, setOnboardingDone] = useState(false)
+  const { processed: hashProcessed, pendingPasswordType, hashError, clearPendingPassword } = useAuthHashHandler()
 
   // Only play the Portal's dissolve transition for a sign-in that happens
   // DURING this session — not for a session already restored from
@@ -29,14 +32,26 @@ function App() {
     if (gateEnabled && ready && !signedIn) setSawPortal(true)
   }, [gateEnabled, ready, signedIn])
 
-  if (gateEnabled && !ready) {
+  if (gateEnabled && (!ready || !hashProcessed)) {
     return <div className="app-content" />
+  }
+
+  // An invite/recovery link lands here with a session already established
+  // (see useAuthHashHandler) but no password set yet — this takes priority
+  // over the normal signedIn check below.
+  if (gateEnabled && pendingPasswordType) {
+    return (
+      <>
+        <SetPasswordScreen mode={pendingPasswordType} onComplete={clearPendingPassword} />
+        <ToastHost />
+      </>
+    )
   }
 
   if (gateEnabled && !signedIn) {
     return (
       <>
-        <LoginScreen />
+        <LoginScreen initialError={hashError} />
         <ToastHost />
       </>
     )

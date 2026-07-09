@@ -25,12 +25,12 @@ function MarketDrift() {
   )
 }
 
-export default function LoginScreen({ dissolving = false, onDissolved }) {
+export default function LoginScreen({ dissolving = false, onDissolved, initialError = null }) {
   const [mode, setMode] = useState('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [status, setStatus] = useState('idle')
-  const [error, setError] = useState(null)
+  const [error, setError] = useState(initialError)
   const [signupDone, setSignupDone] = useState(false)
 
   const isSignUp = mode === 'signup'
