@@ -385,8 +385,10 @@ def _segment_stats(stats, seg_days):
     }
 
 
-def walk_forward(ticker: str, strategy: str) -> dict:
-    df = qc.fetch_history(ticker).dropna(
+def walk_forward(ticker: str, strategy: str, df=None) -> dict:
+    if df is None:
+        df = qc.fetch_history(ticker)
+    df = df.dropna(
         subset=["Baseline", "Upper_Band", "Lower_Band", "Macro_Filter"])
     i = int(len(df) * LAB_SPLIT)
     train_df, test_df = df.iloc[:i], df.iloc[i:]
@@ -849,3 +851,111 @@ def pool_book(progress=None, budget_s: float | None = None) -> dict:
                              "reason": r["fail_reasons"][0]})
     return {"new_assignments": new_assignments, "rejected": rejected,
             "standing": standing, "ran_out_of_time": ran_out}
+
+
+# ── 13) THE UNIVERSE LAB ─────────────────────────────────────
+#     Per-asset, all-family walk-forward across the ENTIRE universe file.
+#     The pooled test taught us edges live at the asset-strategy PAIR
+#     level — so every name takes the same exam the watchlist took.
+#     Chunked downloads, hard budget, resumable via 30-day memory.
+def _download_universe_hist(batch: list) -> dict:
+    """Seam. 5y daily bars for a batch, engine column convention."""
+    import yfinance as yf
+    raw = yf.download(batch, period="5y", interval="1d", group_by="ticker",
+                      auto_adjust=False, progress=False, threads=True)
+    out = {}
+    for t in batch:
+        try:
+            df = raw[t].dropna(subset=["Close"])
+            if len(df) >= 750:
+                out[t] = df.rename(columns={"Close": "Price"})[
+                    ["Open", "High", "Low", "Price", "Volume"]].copy()
+        except Exception:
+            continue
+    return out
+
+
+def universe_lab(progress=None, budget_s: float | None = None, chunk: int = 25) -> dict:
+    import os as _os
+    import time as _t
+    from datetime import date as _date
+    from api import store as _store
+    from api.screener import load_universe
+    budget = float(_os.getenv("ULAB_BUDGET_S", "1800")) if budget_s is None else budget_s
+    deadline = _t.monotonic() + budget
+    lock_days = int(_os.getenv("RELAB_LOCK_DAYS", "30"))
+    pb = load_playbook()
+
+    def _locked(rec) -> bool:
+        if not rec:
+            return False
+        try:
+            assigned = _date.fromisoformat(str(rec.get("assigned_at"))[:10])
+            return (_date.today() - assigned).days < lock_days
+        except Exception:
+            return True
+
+    names = [t for t in load_universe()
+             if not _locked(pb.get(t.upper()))
+             and not _store.cooldown_active(f"ulab:{t}")]
+    total, scanned, errors, ran_out = len(names), 0, 0, False
+    new_pairs = []
+    for i in range(0, len(names), chunk):
+        if _t.monotonic() > deadline:
+            ran_out = True
+            break
+        batch = names[i:i + chunk]
+        try:
+            hist = _download_universe_hist(batch)
+        except Exception:
+            hist = {}
+        for t in batch:
+            if _t.monotonic() > deadline:
+                ran_out = True
+                break
+            scanned += 1
+            df = hist.get(t)
+            if df is None:
+                errors += 1
+                _store.cooldown_set(f"ulab:{t}", 720)
+                continue
+            try:
+                df = qc.add_indicators(df)
+            except Exception:
+                errors += 1
+                _store.cooldown_set(f"ulab:{t}", 720)
+                continue
+            results = []
+            for fam in qc.STRATEGIES:
+                try:
+                    results.append(walk_forward(t, fam, df=df))
+                except Exception:
+                    continue
+            validated = [r for r in results if r["validated"]]
+            if validated:
+                validated.sort(key=lambda r: r["test"]["expectancy_pct"], reverse=True)
+                a = validated[0]
+                today = _date.today().isoformat()
+                _store.save_playbook_assignment(t, a["strategy"], a["name"], today, a["test"])
+                try:
+                    with open("playbook.json") as f:
+                        fpb = json.load(f)
+                except Exception:
+                    fpb = {"assignments": {}}
+                fpb.setdefault("assignments", {})[t] = {
+                    "strategy": a["strategy"], "name": a["name"], "assigned_at": today}
+                with open("playbook.json", "w") as f:
+                    json.dump(fpb, f, indent=2)
+                new_pairs.append({"ticker": t, "strategy": a["strategy"],
+                                  "strategy_name": a["name"], "test": a["test"]})
+            else:
+                _store.cooldown_set(f"ulab:{t}", 720)
+        if progress and not ran_out:
+            try:
+                progress(f"\U0001F52D {scanned}/{total} scanned \u2014 "
+                         f"{len(new_pairs)} validated pair"
+                         f"{'s' if len(new_pairs) != 1 else ''} so far\u2026")
+            except Exception:
+                pass
+    return {"new_pairs": new_pairs, "scanned": scanned, "total": total,
+            "errors": errors, "ran_out_of_time": ran_out}

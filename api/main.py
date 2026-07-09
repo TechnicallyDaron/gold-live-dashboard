@@ -975,6 +975,52 @@ async def _run_pool_book(chat_id=None):
             tg_send(chat_id, "\u274C Universe lab failed \u2014 feed may be flaky. Try again.")
 
 
+def _fmt_universe_lab(res: dict) -> str:
+    lines = [f"\U0001F52D <b>Universe Lab report</b> \u2014 {res['scanned']}/{res['total']} "
+             f"names examined"]
+    if res["new_pairs"]:
+        lines.append(f"\n\u2705 <b>{len(res['new_pairs'])} new validated pair"
+                     f"{'s' if len(res['new_pairs']) != 1 else ''}:</b>")
+        flow = 0.0
+        for r in res["new_pairs"][:15]:
+            t = r["test"]
+            flow += t.get("signals_per_week") or 0
+            lines.append(f"\u2022 <b>{_esc(r['ticker'])}</b> \u2192 {r['strategy_name']} "
+                         f"({t['win_rate']*100:.0f}% win rate on unseen data, "
+                         f"profit factor {t['profit_factor']}, "
+                         f"~{t['signals_per_week']} setups/wk)")
+        if len(res["new_pairs"]) > 15:
+            lines.append(f"\u2026and {len(res['new_pairs']) - 15} more.")
+        lines.append(f"\n\U0001F4C8 Expected new flow: ~{flow:.1f} signals/week added. "
+                     f"Every fire gets Ledger-graded from birth.")
+    else:
+        lines.append("\nNo new pairs this pass \u2014 nothing examined cleared the "
+                     "walk-forward bar. The bar does not move.")
+    if res.get("errors"):
+        lines.append(f"\n\u26A0\uFE0F {res['errors']} names skipped (feed/data issues) "
+                     f"\u2014 they retry in 30 days.")
+    if res.get("ran_out_of_time"):
+        lines.append("\n\u23F3 <b>Budget expired mid-run.</b> Send /ulab again \u2014 "
+                     "it continues exactly where it stopped (finished names are "
+                     "remembered for 30 days).")
+    return "\n".join(lines)
+
+
+async def _run_universe_lab(chat_id=None):
+    try:
+        cid = chat_id or TELEGRAM_CHAT_ID
+        res = await asyncio.to_thread(
+            analytics.universe_lab, lambda msg: tg_send(cid, msg))
+        tg_send(cid, _fmt_universe_lab(res))
+        if res["new_pairs"]:
+            notify("playbook", f"\U0001F52D {len(res['new_pairs'])} new validated pairs",
+                   ", ".join(r["ticker"] for r in res["new_pairs"][:15]))
+    except Exception:
+        if chat_id:
+            tg_send(chat_id, "\u274C Universe Lab failed \u2014 feed may be flaky. "
+                             "/ulab to retry; completed names are remembered.")
+
+
 async def _clock_loop():
     """NY-anchored scheduler: Digest 09:30 ET, Screener 16:15 ET, weekdays."""
     while True:
@@ -991,6 +1037,12 @@ async def _clock_loop():
                 if 1615 <= hhmm < 1645 and not store.cooldown_active(skey):
                     store.cooldown_set(skey, 20)
                     await _run_daily_screener()
+            # Saturday 12:00 ET: the Universe Lab sweeps the 298-name book
+            if now.weekday() == 5:
+                ukey = f"ulabrun:{now.date().isoformat()}"
+                if 1200 <= now.hour * 100 + now.minute < 1230 and not store.cooldown_active(ukey):
+                    store.cooldown_set(ukey, 20)
+                    await _run_universe_lab()
             # Sunday 19:00 ET: the Weekly Report Card
             if now.weekday() == 6:
                 rkey = f"report:{now.date().isoformat()}"
@@ -1024,6 +1076,7 @@ def tg_set_my_commands():
         {"command": "playbook", "description": "Your active validated strategies"},
         {"command": "labbook", "description": "Lab every unassigned asset \u2014 expand the playbook"},
         {"command": "unilab", "description": "Validate strategy families across the whole book"},
+        {"command": "ulab", "description": "Universe Lab: exam all 298 names for new pairs"},
         {"command": "candidates", "description": "Unvalidated fast-family leads"},
         {"command": "valid", "description": "Grade a trade idea (e.g. /valid sofi 16.5 short)"},
         {"command": "positions", "description": "Trades the Guardian is watching"},
@@ -1306,6 +1359,9 @@ def route_command(text: str) -> str:
     if cmd == "/unilab":
         return "__UNILAB__"
 
+    if cmd == "/ulab":
+        return "__ULAB__"
+
     if cmd == "/screener":
         s = store.get_screener()
         if not s.get("hits"):
@@ -1494,6 +1550,14 @@ async def telegram_webhook(
                 "unassigned asset, walk-forward, same thresholds. Results in a "
                 "couple of minutes.")
         asyncio.create_task(_run_lab_book(chat_id))
+        return {"ok": True}
+    if reply == "__ULAB__":
+        tg_send(chat_id, "\U0001F52D <b>Universe Lab launched</b> \u2014 every name in "
+                "the 298-ticker universe takes the full 8-family walk-forward exam. "
+                "This is a batch job: expect 20\u201340 minutes with progress pings. "
+                "Fully resumable \u2014 if it runs out of budget, /ulab again continues "
+                "where it stopped.")
+        asyncio.create_task(_run_universe_lab(chat_id))
         return {"ok": True}
     if reply == "__UNILAB__":
         tg_send(chat_id, "\U0001F30C <b>Pooled universe validation</b> \u2014 every "
