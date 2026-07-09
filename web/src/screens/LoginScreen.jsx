@@ -32,6 +32,7 @@ export default function LoginScreen({ dissolving = false, onDissolved, initialEr
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState(initialError)
   const [signupDone, setSignupDone] = useState(false)
+  const [resetSent, setResetSent] = useState(false)
 
   const isSignUp = mode === 'signup'
 
@@ -69,6 +70,25 @@ export default function LoginScreen({ dissolving = false, onDissolved, initialEr
     setMode(isSignUp ? 'signin' : 'signup')
     setError(null)
     setSignupDone(false)
+    setResetSent(false)
+  }
+
+  const requestReset = async () => {
+    setResetSent(false)
+    if (!email.trim()) {
+      setError('Enter your email above, then tap "Forgot password?" again.')
+      return
+    }
+    setError(null)
+    try {
+      const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: window.location.origin,
+      })
+      if (err) throw err
+      setResetSent(true)
+    } catch (err) {
+      setError(err.message)
+    }
   }
 
   return (
@@ -137,6 +157,9 @@ export default function LoginScreen({ dissolving = false, onDissolved, initialEr
             </div>
 
             {error && <p className="login-error">{error}</p>}
+            {resetSent && (
+              <p className="login-reset-sent">Password reset email sent — check your inbox.</p>
+            )}
 
             <button
               type="button"
@@ -152,6 +175,12 @@ export default function LoginScreen({ dissolving = false, onDissolved, initialEr
                   ? 'Create account'
                   : 'Sign in'}
             </button>
+
+            {!isSignUp && (
+              <button type="button" className="login-toggle" onClick={requestReset}>
+                Forgot password?
+              </button>
+            )}
 
             <button type="button" className="login-toggle" onClick={toggleMode}>
               {isSignUp ? 'Have an account? Sign in' : 'Create account'}

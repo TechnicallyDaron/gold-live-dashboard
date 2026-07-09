@@ -274,6 +274,14 @@
   margin: 0 0 12px;
 }
 
+.login-reset-sent {
+  width: 100%;
+  color: var(--long);
+  font-size: 12px;
+  text-align: center;
+  margin: 0 0 12px;
+}
+
 .login-submit {
   width: 100%;
   padding: 13px;
