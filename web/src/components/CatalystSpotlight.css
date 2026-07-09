@@ -1,0 +1,51 @@
+.catalyst-spotlight {
+  flex-shrink: 0;
+  margin-bottom: 16px;
+}
+
+.catalyst-scroll {
+  display: flex;
+  width: 100%;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+
+.catalyst-card {
+  flex-shrink: 0;
+  scroll-snap-align: start;
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bottom));
+  border: 1px solid var(--bullion);
+  box-shadow: 0 0 16px rgba(232, 181, 74, 0.15);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.catalyst-card strong {
+  color: var(--bullion);
+}
+
+.catalyst-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.catalyst-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.catalyst-dot--active {
+  background: var(--bullion);
+}
