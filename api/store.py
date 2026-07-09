@@ -105,7 +105,6 @@ def close_position(user_id: str | None, pid: str, journal_entry: dict) -> None:
         je = dict(journal_entry)
         je["user_id"] = user_id
         je.pop("id", None)
-        je.pop("expiration", None)   # not a journal column (schema.sql)
         je["contract_type"] = je.pop("type", None)   # column-name mapping
         db.insert("journal", je)
         db.update("positions", {"user_id": user_id, "id": pid},
@@ -199,3 +198,34 @@ def get_screener() -> dict:
             return json.load(f)
     except Exception:
         return {"scan_date": None, "hits": []}
+
+
+# ── PLAYBOOK (DB rows survive redeploys; file is engine cache/fallback) ──
+def get_playbook_assignments() -> dict | None:
+    """{key: {strategy, name, assigned_at, stats...}} from DB, or None if
+    DB disabled/empty (caller falls back to playbook.json)."""
+    if not db.enabled() or not OPERATOR:
+        return None
+    try:
+        rows = db.select("playbooks", {"user_id": OPERATOR}, order="asset_key.asc")
+    except Exception:
+        return None
+    if not rows:
+        return None
+    return {r["asset_key"]: {"strategy": r["strategy"], "name": r["strategy_name"],
+                             "assigned_at": r["assigned_at"]} for r in rows}
+
+
+def save_playbook_assignment(key: str, strategy: str, strategy_name: str,
+                             assigned_at: str, stats: dict | None = None) -> None:
+    if db.enabled() and OPERATOR:
+        try:
+            row = {"user_id": OPERATOR, "asset_key": key, "strategy": strategy,
+                   "strategy_name": strategy_name, "assigned_at": assigned_at}
+            if stats:
+                row.update({"oos_win_rate": stats.get("win_rate"),
+                            "oos_profit_factor": stats.get("profit_factor"),
+                            "oos_expectancy_pct": stats.get("expectancy_pct")})
+            db.upsert("playbooks", row, on_conflict="user_id,asset_key")
+        except Exception:
+            pass

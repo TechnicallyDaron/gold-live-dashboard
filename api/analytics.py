@@ -405,12 +405,21 @@ def strategy_lab(asset: str) -> dict:
 
 # ── 7) PLAYBOOK + SCAN ───────────────────────────────────────
 def load_playbook() -> dict:
-    """assignments keyed UPPER by display name AND ticker for easy lookup."""
+    """assignments keyed UPPER by display name AND ticker for easy lookup.
+    DB rows (redeploy-proof) take precedence; playbook.json is fallback."""
     try:
-        with open("playbook.json") as f:
-            pb = json.load(f)
+        from api import store as _store
+        db_assignments = _store.get_playbook_assignments()
+    except Exception:
+        db_assignments = None
+    try:
+        if db_assignments is not None:
+            assignments = db_assignments
+        else:
+            with open("playbook.json") as f:
+                assignments = (json.load(f).get("assignments") or {})
         out = {}
-        for key, a in (pb.get("assignments") or {}).items():
+        for key, a in assignments.items():
             ticker, name, _ = qc.resolve_ticker(key)
             rec = {"key": key, "strategy": a.get("strategy"),
                    "strategy_name": a.get("name"), "assigned_at": a.get("assigned_at")}
@@ -419,6 +428,57 @@ def load_playbook() -> dict:
         return out
     except Exception:
         return {}
+
+
+# ── 11) PLAYBOOK EXPANSION — lab the whole book, same thresholds ──
+def lab_book() -> dict:
+    """Run the Strategy Lab across every UNASSIGNED watchlist asset.
+    Assigned names are never re-labbed (stability rule: assignments stand
+    >= 1 month). Thresholds untouched — coverage grows, the bar doesn't move.
+    New assignments persist to DB (redeploy-proof) + playbook.json."""
+    from datetime import date as _date
+    from api import store as _store
+    pb = load_playbook()
+    new_assignments, failed, skipped = [], [], []
+    for name in qc.load_watchlist():
+        if pb.get(name.upper()):
+            skipped.append(name)
+            continue
+        try:
+            lab = strategy_lab(name)
+        except Exception:
+            failed.append({"asset": name, "reason": "lab error (feed?)"})
+            continue
+        if lab["flag"] == "STRATEGY_ASSIGNED":
+            a = lab["assigned"]
+            rec = {"asset": name, "strategy": a["strategy"],
+                   "strategy_name": a["name"], "test": a["test"]}
+            new_assignments.append(rec)
+            today = _date.today().isoformat()
+            _store.save_playbook_assignment(name, a["strategy"], a["name"],
+                                            today, a["test"])
+            try:
+                with open("playbook.json") as f:
+                    fpb = json.load(f)
+            except Exception:
+                fpb = {"assignments": {}}
+            fpb.setdefault("assignments", {})[name] = {
+                "strategy": a["strategy"], "name": a["name"], "assigned_at": today}
+            with open("playbook.json", "w") as f:
+                json.dump(fpb, f, indent=2)
+        else:
+            top = max(lab["results"],
+                      key=lambda r: r["test"]["expectancy_pct"]) if lab["results"] else None
+            failed.append({"asset": name,
+                           "reason": (top["fail_reasons"][0] if top and top["fail_reasons"]
+                                      else "nothing validated")})
+    total_spw = 0.0
+    for rec in load_playbook().values():
+        pass  # keys are duplicated per asset; compute below from new list only
+    return {"new_assignments": new_assignments, "nothing_validated": failed,
+            "already_assigned": sorted(set(skipped)),
+            "expected_new_signals_per_week": round(
+                sum(r["test"].get("signals_per_week") or 0 for r in new_assignments), 2)}
 
 
 def assignment_for(asset: str):

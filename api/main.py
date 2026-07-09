@@ -456,8 +456,7 @@ class CloseBody(BaseModel):
 
 @app.post("/api/positions/{pid}/close")
 def close_position(pid: str, body: CloseBody, user: dict = Depends(get_current_user)):
-    uid = store.resolve_user(user)
-    pos = store.get_positions(uid)
+    pos = qc.load_positions()
     if pid not in pos:
         raise HTTPException(status_code=404, detail=f"Position '{pid}' not found.")
     p = pos[pid]
@@ -489,7 +488,7 @@ def close_position(pid: str, body: CloseBody, user: dict = Depends(get_current_u
         "thesis": body.thesis, "rule_compliant": body.rule_compliant,
         "notes": body.notes, "logged_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
-    store.close_position(uid, pid, entry)
+    store.close_position(store.resolve_user(user), pid, entry)
     notify("journal", f"\U0001F4D2 {entry['asset']} closed {pnl_pct:+.1f}%" if pnl_pct is not None
            else f"\U0001F4D2 {entry['asset']} closed", body.notes or "Logged to the journal.")
     return {"journal_entry": entry, "persistence_warning": PERSISTENCE_WARNING}
@@ -609,7 +608,32 @@ def _agent_pass():
                    f"extreme stretch \u2014 historically where thrusts stall. If you're "
                    f"in profit, consider locking some in.")
 
-    # 3) Macro proximity: big USD news inside the 3-hour window
+    # 3) DAY-MOVE RADAR: situational awareness, explicitly NOT a signal.
+    #    Any watchlist name moving hard on the day gets ONE ping. The copy
+    #    warns against chasing — awareness without an invitation.
+    day_move_min = float(os.getenv("DAY_MOVE_ALERT_PCT", "3.0"))
+    for name, d in qc.load_watchlist().items():
+        try:
+            q = qc.get_quote(d["ticker"])
+        except Exception:
+            continue
+        pct = (q or {}).get("pct")
+        if pct is None or abs(pct) < day_move_min:
+            continue
+        k = f"dm:{d['ticker']}:{today}"
+        if store.cooldown_active(k):
+            continue
+        store.cooldown_set(k, 20)
+        direction = "up" if pct > 0 else "down"
+        arrow = "\U0001F4C8" if pct > 0 else "\U0001F4C9"
+        body = (f"{name} is {direction} {abs(pct):.1f}% today at ${q['price']:,.2f}. "
+                f"Heads-up only \u2014 NOT a signal. Big moves mean options premiums "
+                f"are already inflated; chasing usually means paying top dollar for a "
+                f"move that already happened. Check /bias {name.lower()} before touching anything.")
+        tg_send(TELEGRAM_CHAT_ID, f"{arrow} <b>BIG MOVE \u2014 {name} {pct:+.1f}%</b>\n\n{body}")
+        notify("daymove", f"{arrow} {name} {pct:+.1f}% today", body)
+
+    # 4) Macro proximity: big USD news inside the 3-hour window
     try:
         rad = analytics.macro_radar()
         if rad.get("hijack") and rad.get("nearest"):
@@ -693,6 +717,44 @@ async def _run_daily_screener():
     return hits
 
 
+def _fmt_lab_book(res: dict) -> str:
+    lines = ["\U0001F9EA <b>Playbook expansion complete.</b>"]
+    if res["new_assignments"]:
+        lines.append(f"\n\u2705 <b>{len(res['new_assignments'])} new "
+                     f"assignment{'s' if len(res['new_assignments']) != 1 else ''}:</b>")
+        for r in res["new_assignments"]:
+            t = r["test"]
+            lines.append(f"\u2022 <b>{r['asset']}</b> \u2192 {r['strategy_name']} "
+                         f"({t['win_rate']*100:.0f}% OOS win, PF {t['profit_factor']}, "
+                         f"~{t['signals_per_week']:.2f} signals/wk)")
+        lines.append(f"\n\U0001F4C8 Expected new flow: ~"
+                     f"{res['expected_new_signals_per_week']:.1f} signals/week added.")
+    else:
+        lines.append("\nNo new assignments this pass \u2014 nothing else cleared "
+                     "the walk-forward bar. The bar does not move.")
+    if res["nothing_validated"]:
+        lines.append(f"\n\U0001F6AB Rejected ({len(res['nothing_validated'])}):")
+        for f in res["nothing_validated"][:8]:
+            lines.append(f"\u2022 {f['asset']}: {f['reason']}")
+    if res["already_assigned"]:
+        lines.append(f"\n\U0001F512 Standing: {', '.join(res['already_assigned'])}")
+    return "\n".join(lines)
+
+
+async def _run_lab_book(chat_id=None):
+    try:
+        res = await asyncio.to_thread(analytics.lab_book)
+        msg = _fmt_lab_book(res)
+        tg_send(chat_id or TELEGRAM_CHAT_ID, msg)
+        if res["new_assignments"]:
+            notify("playbook", f"\U0001F9EA {len(res['new_assignments'])} new "
+                   f"playbook assignments",
+                   ", ".join(r["asset"] for r in res["new_assignments"]))
+    except Exception:
+        if chat_id:
+            tg_send(chat_id, "\u274C Lab run failed \u2014 feed may be flaky. Try again.")
+
+
 async def _clock_loop():
     """NY-anchored scheduler: Digest 09:30 ET, Screener 16:15 ET, weekdays."""
     while True:
@@ -709,6 +771,12 @@ async def _clock_loop():
                 if 1615 <= hhmm < 1645 and not store.cooldown_active(skey):
                     store.cooldown_set(skey, 20)
                     await _run_daily_screener()
+            # Sunday 18:00 ET: expand the validated book while markets sleep
+            if now.weekday() == 6 and os.getenv("AGENT", "on") != "off":
+                lkey = f"labbook:{now.date().isoformat()}"
+                if 1800 <= now.hour * 100 + now.minute < 1830 and not store.cooldown_active(lkey):
+                    store.cooldown_set(lkey, 20)
+                    await _run_lab_book()
         except Exception:
             pass
         await asyncio.sleep(60)
@@ -726,6 +794,7 @@ def tg_set_my_commands():
         {"command": "screener", "description": "Fresh 52-week breakout catalysts"},
         {"command": "lab", "description": "Walk-forward test an asset (e.g. /lab nvda)"},
         {"command": "playbook", "description": "Your active validated strategies"},
+        {"command": "labbook", "description": "Lab every unassigned asset \u2014 expand the playbook"},
         {"command": "candidates", "description": "Unvalidated fast-family leads"},
         {"command": "valid", "description": "Grade a trade idea (e.g. /valid sofi 16.5 short)"},
         {"command": "positions", "description": "Trades the Guardian is watching"},
@@ -962,6 +1031,9 @@ def route_command(text: str) -> str:
                          f"<b>{h['strategy_name']}</b> is firing a {verb} ({h['side'].upper()}) setup.")
         return "\n".join(lines)
 
+    if cmd == "/labbook":
+        return "__LABBOOK__"
+
     if cmd == "/screener":
         s = store.get_screener()
         if not s.get("hits"):
@@ -1141,6 +1213,12 @@ async def telegram_webhook(
         return {"ok": True}
 
     reply = route_command(text)
+    if reply == "__LABBOOK__":
+        tg_send(chat_id, "\U0001F9EA <b>Labbing your whole book</b> \u2014 every "
+                "unassigned asset, walk-forward, same thresholds. Results in a "
+                "couple of minutes.")
+        asyncio.create_task(_run_lab_book(chat_id))
+        return {"ok": True}
     if reply == "__LABMENU__":
         tg_send(chat_id, "\U0001F9EA Pick an asset to run the lab on:",
                 reply_markup=asset_inline_keyboard("lab"))
