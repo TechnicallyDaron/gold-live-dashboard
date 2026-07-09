@@ -541,7 +541,10 @@ def close_position(pid: str, body: CloseBody, user: dict = Depends(get_current_u
     store.close_position(uid, pid, entry)
     # No global notification here: closes are private to the account.
     # The in-app toast confirms; the journal is the record.
-    return {"journal_entry": entry, "persistence_warning": PERSISTENCE_WARNING}
+    out = {"journal_entry": entry}
+    if not uid:                       # file mode only — DB closes are permanent
+        out["persistence_warning"] = PERSISTENCE_WARNING
+    return out
 
 
 @app.get("/api/journal")

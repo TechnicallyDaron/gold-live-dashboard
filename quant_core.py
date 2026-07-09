@@ -184,6 +184,12 @@ STRATEGIES = {
             "desc": "RSI(14) below 30 / above 70 with the trend filter \u2192 exit at RSI 50"},
     "pullback": {"name": "Trend Pullback",
                  "desc": "Shallow dip (\u22120.75\u03C3) WITH the 200 EMA trend \u2192 exit at +0.5\u03C3. Built for weekly-cadence signals."},
+    "breakout52": {"name": "Catalyst Momentum",
+                   "desc": "Fresh 52-week-high breakout on elevated volume \u2192 ride the post-breakout drift, exit on trend loss"},
+    "gapfade": {"name": "Gap Reversal",
+                "desc": "Hard gap against the prevailing trend that closes strong \u2192 enter the recovery back to the mean"},
+    "trend": {"name": "Trend Rider",
+              "desc": "Price reclaims the 20 EMA with the macro trend, not overextended \u2192 ride until the trend breaks"},
     "rsi2": {"name": "Fast RSI(2)",
              "desc": "RSI(2) washout (<10 / >90) with the trend filter \u2192 exit at 65/35. High-frequency reversion."},
 }
@@ -212,6 +218,14 @@ def _run_backtest(ticker: str, strategy: str, df=None):
     valid["RSI2"] = 100 - 100 / (1 + g2 / l2.replace(0, np.nan))
     sigma = (valid["Upper_Band"] - valid["Baseline"]) / 2.0
     valid["Z"] = (valid["Price"] - valid["Baseline"]) / sigma.replace(0, np.nan)
+    valid["P252H"] = valid["High"].shift(1).rolling(252, min_periods=200).max()
+    valid["P252L"] = valid["Low"].shift(1).rolling(252, min_periods=200).min()
+    valid["PrevClose"] = valid["Price"].shift(1)
+    valid["PrevBaseline"] = valid["Baseline"].shift(1)
+    if "Volume" in valid.columns:
+        valid["VolR"] = valid["Volume"] / valid["Volume"].rolling(30).mean()
+    else:
+        valid["VolR"] = np.nan   # volume condition waived when feed lacks it
 
     equity, equity_marks = 1.0, [1.0]
     position, entry_price, entry_date = 0, 0.0, None
@@ -240,6 +254,11 @@ def _run_backtest(ticker: str, strategy: str, df=None):
         baseline_v, upper_v = float(bar.Baseline), float(bar.Upper_Band)
         lower_v, macro_v = float(bar.Lower_Band), float(bar.Macro_Filter)
         rsi_v = None if pd.isna(bar.RSI) else float(bar.RSI)
+        p252h = None if pd.isna(bar.P252H) else float(bar.P252H)
+        p252l = None if pd.isna(bar.P252L) else float(bar.P252L)
+        prev_c = None if pd.isna(bar.PrevClose) else float(bar.PrevClose)
+        prev_b = None if pd.isna(bar.PrevBaseline) else float(bar.PrevBaseline)
+        volr_ok = pd.isna(bar.VolR) or float(bar.VolR) >= 1.5
         rsi2_v = None if pd.isna(bar.RSI2) else float(bar.RSI2)
         z_v = None if pd.isna(bar.Z) else float(bar.Z)
 
@@ -262,14 +281,20 @@ def _run_backtest(ticker: str, strategy: str, df=None):
                (strategy == "breakout" and close < baseline_v) or \
                (strategy == "rsi" and rsi_v is not None and rsi_v >= 50) or \
                (strategy == "pullback" and z_v is not None and z_v >= 0.5) or \
-               (strategy == "rsi2" and rsi2_v is not None and rsi2_v >= 65):
+               (strategy == "rsi2" and rsi2_v is not None and rsi2_v >= 65) or \
+               (strategy == "breakout52" and close < baseline_v) or \
+               (strategy == "gapfade" and z_v is not None and z_v >= 0.0) or \
+               (strategy == "trend" and close < baseline_v):
                 pending_exit_label = "Long Exit (Signal)"
         elif position == -1:
             if (strategy == "meanrev" and close <= baseline_v) or \
                (strategy == "breakout" and close > baseline_v) or \
                (strategy == "rsi" and rsi_v is not None and rsi_v <= 50) or \
                (strategy == "pullback" and z_v is not None and z_v <= -0.5) or \
-               (strategy == "rsi2" and rsi2_v is not None and rsi2_v <= 35):
+               (strategy == "rsi2" and rsi2_v is not None and rsi2_v <= 35) or \
+               (strategy == "breakout52" and close > baseline_v) or \
+               (strategy == "gapfade" and z_v is not None and z_v <= 0.0) or \
+               (strategy == "trend" and close > baseline_v):
                 pending_exit_label = "Short Exit (Signal)"
 
         if position == 0 and pending_entry == 0:
@@ -297,6 +322,21 @@ def _run_backtest(ticker: str, strategy: str, df=None):
                 if rsi2_v < 10 and close > macro_v:
                     pending_entry = 1
                 elif rsi2_v > 90 and close < macro_v:
+                    pending_entry = -1
+            elif strategy == "breakout52":
+                if p252h is not None and close > p252h and close > macro_v and volr_ok:
+                    pending_entry = 1
+                elif p252l is not None and close < p252l and close < macro_v and volr_ok:
+                    pending_entry = -1
+            elif strategy == "gapfade" and prev_c is not None:
+                if open_ <= prev_c * 0.985 and close > open_ and close > macro_v:
+                    pending_entry = 1
+                elif open_ >= prev_c * 1.015 and close < open_ and close < macro_v:
+                    pending_entry = -1
+            elif strategy == "trend" and prev_c is not None and prev_b is not None and z_v is not None:
+                if prev_c <= prev_b and close > baseline_v and close > macro_v and z_v <= 1.0:
+                    pending_entry = 1
+                elif prev_c >= prev_b and close < baseline_v and close < macro_v and z_v >= -1.0:
                     pending_entry = -1
 
     def stat_block(subset):

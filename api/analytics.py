@@ -102,6 +102,35 @@ def _signals_today(ticker: str) -> dict:
                        "short" if (z_v >= 0.75 and close < macro_v) else None)
     out["rsi2"] = ("long" if (rsi2_v < 10 and close > macro_v) else
                    "short" if (rsi2_v > 90 and close < macro_v) else None)
+    # ── New families (mirror quant_core._run_backtest exactly) ──
+    p252h = df["High"].shift(1).rolling(252, min_periods=200).max().iloc[-1]
+    p252l = df["Low"].shift(1).rolling(252, min_periods=200).min().iloc[-1]
+    import pandas as _pd
+    if "Volume" in df.columns:
+        volr = (df["Volume"] / df["Volume"].rolling(30).mean()).iloc[-1]
+        volr_ok = _pd.isna(volr) or float(volr) >= 1.5
+    else:
+        volr_ok = True
+    out["breakout52"] = ("long" if (not _pd.isna(p252h) and close > float(p252h)
+                                    and close > macro_v and volr_ok) else
+                         "short" if (not _pd.isna(p252l) and close < float(p252l)
+                                     and close < macro_v and volr_ok) else None)
+    prev_c = float(df["Price"].iloc[-2]) if len(df) > 1 else None
+    open_t = float(row["Open"])
+    out["gapfade"] = None
+    if prev_c is not None:
+        if open_t <= prev_c * 0.985 and close > open_t and close > macro_v:
+            out["gapfade"] = "long"
+        elif open_t >= prev_c * 1.015 and close < open_t and close < macro_v:
+            out["gapfade"] = "short"
+    prev_b = float(df["Baseline"].iloc[-2]) if len(df) > 1 else None
+    baseline_v = float(row["Baseline"])
+    out["trend"] = None
+    if prev_c is not None and prev_b is not None:
+        if prev_c <= prev_b and close > baseline_v and close > macro_v and z_v <= 1.0:
+            out["trend"] = "long"
+        elif prev_c >= prev_b and close < baseline_v and close < macro_v and z_v >= -1.0:
+            out["trend"] = "short"
     return out
 
 
@@ -448,9 +477,19 @@ def lab_book(progress=None, budget_s: float | None = None) -> dict:
     budget = budget_s if budget_s is not None else float(_os.getenv("LABBOOK_BUDGET_S", "480"))
     deadline = _t.monotonic() + budget
     pb = load_playbook()
+    lock_days = int(_os.getenv("RELAB_LOCK_DAYS", "30"))
+
+    def _locked(rec) -> bool:
+        if not rec:
+            return False
+        try:
+            assigned = _date.fromisoformat(str(rec.get("assigned_at"))[:10])
+            return (_date.today() - assigned).days < lock_days
+        except Exception:
+            return True   # unknown age -> keep the stability rule
     new_assignments, failed = [], []
-    todo = [n for n in qc.load_watchlist() if not pb.get(n.upper())]
-    skipped = [n for n in qc.load_watchlist() if pb.get(n.upper())]
+    todo = [n for n in qc.load_watchlist() if not _locked(pb.get(n.upper()))]
+    skipped = [n for n in qc.load_watchlist() if _locked(pb.get(n.upper()))]
     ran_out = False
     for i, name in enumerate(todo):
         if _t.monotonic() > deadline:
@@ -539,6 +578,9 @@ STRATEGY_PLAIN = {
     "rsi": "buy washouts / fade blowoffs (momentum gauge)",
     "pullback": "buy shallow dips inside an uptrend",
     "rsi2": "fast snap-back after a sharp washout",
+    "breakout52": "ride fresh 52-week breakouts on big volume",
+    "gapfade": "buy panic gaps that recover inside an uptrend",
+    "trend": "ride the trend after price reclaims its average",
 }
 
 
