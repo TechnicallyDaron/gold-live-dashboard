@@ -431,19 +431,31 @@ def load_playbook() -> dict:
 
 
 # ── 11) PLAYBOOK EXPANSION — lab the whole book, same thresholds ──
-def lab_book() -> dict:
+def lab_book(progress=None, budget_s: float | None = None) -> dict:
     """Run the Strategy Lab across every UNASSIGNED watchlist asset.
     Assigned names are never re-labbed (stability rule: assignments stand
     >= 1 month). Thresholds untouched — coverage grows, the bar doesn't move.
     New assignments persist to DB (redeploy-proof) + playbook.json."""
+    import os as _os
+    import time as _t
     from datetime import date as _date
     from api import store as _store
+    budget = budget_s if budget_s is not None else float(_os.getenv("LABBOOK_BUDGET_S", "480"))
+    deadline = _t.monotonic() + budget
     pb = load_playbook()
-    new_assignments, failed, skipped = [], [], []
-    for name in qc.load_watchlist():
-        if pb.get(name.upper()):
-            skipped.append(name)
-            continue
+    new_assignments, failed = [], []
+    todo = [n for n in qc.load_watchlist() if not pb.get(n.upper())]
+    skipped = [n for n in qc.load_watchlist() if pb.get(n.upper())]
+    ran_out = False
+    for i, name in enumerate(todo):
+        if _t.monotonic() > deadline:
+            ran_out = True
+            break
+        if progress and i and i % 6 == 0:
+            try:
+                progress(f"\U0001F9EA {i}/{len(todo)} labbed \u2014 still working\u2026")
+            except Exception:
+                pass
         try:
             lab = strategy_lab(name)
         except Exception:
@@ -476,7 +488,7 @@ def lab_book() -> dict:
     for rec in load_playbook().values():
         pass  # keys are duplicated per asset; compute below from new list only
     return {"new_assignments": new_assignments, "nothing_validated": failed,
-            "already_assigned": sorted(set(skipped)),
+            "already_assigned": sorted(set(skipped)), "ran_out_of_time": ran_out,
             "expected_new_signals_per_week": round(
                 sum(r["test"].get("signals_per_week") or 0 for r in new_assignments), 2)}
 
@@ -544,11 +556,11 @@ def plain_state(b: dict):
         return ("👀",
                 "Getting interesting — price is drifting toward the edge of its "
                 "normal range. Not a setup yet; worth watching.",
-                f"A setup would arm near ${b['arm_level']:,.2f}")
+                f"A setup would trigger near ${b['arm_level']:,.2f}")
     return ("😴",
             "No setup — price is inside its normal range. Nothing statistically "
             "interesting here. Waiting IS the move.",
-            f"Nearest interesting level: ${b['arm_level']:,.2f} "
+            f"Nearest level worth watching: ${b['arm_level']:,.2f} "
             f"({b['dist_to_arm_pct']:+.1f}% away)")
 
 

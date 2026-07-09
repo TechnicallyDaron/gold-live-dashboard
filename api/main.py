@@ -590,8 +590,10 @@ def _agent_pass():
                 continue
             store.cooldown_set(k, ALERT_COOLDOWN_H)
             caption = (f"\U0001F4B0 <b>TAKE PROFIT ALERT</b> \U0001F4B0\n\n"
-                       f"{name} has reached extreme overextension exhaustion at "
-                       f"${st['price']:,.2f}. Lock in options contract premium immediately.")
+                       f"The big move in {name} looks out of gas at ${st['price']:,.2f} "
+                       f"\u2014 price ran unusually far and is now losing steam, which is "
+                       f"historically where runs stall. If you're sitting on profit, "
+                       f"this is the moment to strongly consider taking it.")
             sent_media = False
             try:
                 b = qc.get_bias(d["ticker"])
@@ -725,8 +727,9 @@ def _fmt_lab_book(res: dict) -> str:
         for r in res["new_assignments"]:
             t = r["test"]
             lines.append(f"\u2022 <b>{r['asset']}</b> \u2192 {r['strategy_name']} "
-                         f"({t['win_rate']*100:.0f}% OOS win, PF {t['profit_factor']}, "
-                         f"~{t['signals_per_week']:.2f} signals/wk)")
+                         f"({t['win_rate']*100:.0f}% win rate on unseen data, "
+                         f"profit factor {t['profit_factor']}, "
+                         f"~{t['signals_per_week']:.2f} setups/wk)")
         lines.append(f"\n\U0001F4C8 Expected new flow: ~"
                      f"{res['expected_new_signals_per_week']:.1f} signals/week added.")
     else:
@@ -738,12 +741,18 @@ def _fmt_lab_book(res: dict) -> str:
             lines.append(f"\u2022 {f['asset']}: {f['reason']}")
     if res["already_assigned"]:
         lines.append(f"\n\U0001F512 Standing: {', '.join(res['already_assigned'])}")
+    if res.get("ran_out_of_time"):
+        lines.append("\n\u23F3 <b>Partial run</b> \u2014 the data feed was slow and the "
+                     "time budget expired. Send /labbook again to continue \u2014 "
+                     "finished assets are never re-labbed.")
     return "\n".join(lines)
 
 
 async def _run_lab_book(chat_id=None):
     try:
-        res = await asyncio.to_thread(analytics.lab_book)
+        cid = chat_id or TELEGRAM_CHAT_ID
+        res = await asyncio.to_thread(
+            analytics.lab_book, lambda msg: tg_send(cid, msg))
         msg = _fmt_lab_book(res)
         tg_send(chat_id or TELEGRAM_CHAT_ID, msg)
         if res["new_assignments"]:
@@ -934,12 +943,19 @@ def _fmt_positions() -> str:
         return "\U0001F6E1 No positions on file."
     lines = ["\U0001F6E1 <b>Guarded Positions</b>"]
     for pid, p in pos.items():
+        guard = []
+        if p.get("premium_stop"):
+            guard.append(f"stop: ${p['premium_stop']} premium")
+        if p.get("time_stop"):
+            guard.append(f"time stop: {p['time_stop']}")
+        inval = p.get("invalidation_above") or p.get("invalidation_below")
+        if inval:
+            side_word = "above" if p.get("invalidation_above") else "below"
+            guard.append(f"invalidation: {side_word} ${inval}")
         lines.append(
-            f"\u2022 {p.get('asset','?')} ${p.get('strike','?')}"
-            f"{str(p.get('type',''))[:1].upper()} exp {p.get('expiration','?')}\n"
-            f"   stop ${p.get('premium_stop','?')} | time stop {p.get('time_stop','\u2014')} | "
-            f"inval {p.get('invalidation_above') or p.get('invalidation_below') or '\u2014'}"
-        )
+            f"\u2022 <b>{p.get('asset','?')}</b> ${p.get('strike','?')} "
+            f"{str(p.get('type','')).lower()} \u2014 exp {p.get('expiration','?')}\n"
+            f"   {' \u00b7 '.join(guard) if guard else 'no stops set'}")
     return "\n".join(lines)
 
 
@@ -976,9 +992,12 @@ def _fmt_backtest(asset_query: str) -> str:
             _, stats = qc.run_backtest(ticker, key)
             v = qc.viability(stats)
             pf = "\u221E" if v["profit_factor"] is None else f"{v['profit_factor']:.2f}"
+            pf_plain = ("no losing trades" if v["profit_factor"] is None
+                        else f"profit factor {v['profit_factor']:.2f}")
             lines.append(f"{v['verdict']} <b>{meta['name']}</b>\n"
-                         f"   PF {pf} | win {stats['all']['win_rate']*100:.0f}% | "
-                         f"{stats['strategy_return']*100:+.1f}% | {stats['all']['n']} trades")
+                         f"   {stats['all']['win_rate']*100:.0f}% win rate over "
+                         f"{stats['all']['n']} trades \u00b7 {pf_plain} \u00b7 "
+                         f"{stats['strategy_return']*100:+.1f}% total over 5 years")
         except Exception:
             lines.append(f"\u274C {meta['name']} \u2014 feed down")
     return "\n".join(lines)
@@ -991,7 +1010,7 @@ def _fmt_macro() -> str:
     lines = ["\U0001F6A8 <b>Upcoming High-Impact</b>"]
     for e in events:
         lines.append(f"\u2022 {e['time_et']} ET \u2014 {e['currency']} {e['event']} "
-                     f"(F {e['forecast']})")
+                     f"(expected: {e['forecast']})")
     return "\n".join(lines)
 
 
@@ -1125,13 +1144,17 @@ def route_command(text: str) -> str:
             lab = analytics.strategy_lab(target)
         except Exception:
             return "\u274C Feed down \u2014 try again shortly."
-        lines = [f"\U0001F9EA <b>Strategy Lab \u2014 {lab['asset']}</b> (verdicts on held-out 30%)"]
+        lines = [f"\U0001F9EA <b>Strategy Lab \u2014 {lab['asset']}</b>\n"
+                 f"<i>Each style was graded ONLY on recent data it had never "
+                 f"seen \u2014 no participation trophies.</i>"]
         for r in lab["results"]:
             t = r["test"]
             mark = "\u2705" if r["validated"] else "\u274C"
-            pf = t["profit_factor"] if t["profit_factor"] is not None else "\u221E"
-            lines.append(f"{mark} <b>{r['name']}</b> \u2014 OOS: win {t['win_rate']*100:.0f}% | "
-                         f"PF {pf} | {t['expectancy_pct']:+.2f}%/trade | {t['signals_per_week']}/wk")
+            pf_plain = ("no losing trades" if t["profit_factor"] is None
+                        else f"profit factor {t['profit_factor']:.2f}")
+            lines.append(f"{mark} <b>{r['name']}</b> \u2014 {t['win_rate']*100:.0f}% win rate \u00b7 "
+                         f"{pf_plain} \u00b7 avg {t['expectancy_pct']:+.2f}% per trade \u00b7 "
+                         f"~{t['signals_per_week']} setups/wk")
         if lab["assigned"]:
             lines.append(f"\n\U0001F3AF <b>ASSIGNED: {lab['assigned']['name']}</b> \u2014 "
                          f"the one strategy for this asset.")
@@ -1153,9 +1176,9 @@ def route_command(text: str) -> str:
                     f"Regime: {e['regime']['label']}. Sitting on hands IS the position.")
         lines = [f"⚡ <b>EDGE FOUND — {e['asset']}</b>"]
         for c in e["candidates"]:
-            lines.append(f"• {c['name']} → {c['signal_today'].upper()} | "
-                         f"5y win {c['win_rate_5y']*100:.0f}% ({c['trades_5y']} trades) | "
-                         f"exp {c['expectancy_pct']:+.2f}%/trade")
+            lines.append(f"• {c['name']} → {c['signal_today'].upper()} \u2014 "
+                         f"won {c['win_rate_5y']*100:.0f}% of {c['trades_5y']} trades "
+                         f"over 5 years, averaging {c['expectancy_pct']:+.2f}% per trade")
         return "\n".join(lines)
 
     if cmd == "/ask":
