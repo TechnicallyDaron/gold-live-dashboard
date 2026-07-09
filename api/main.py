@@ -934,6 +934,47 @@ def _fmt_report_card() -> str:
     return "\n".join(lines)
 
 
+def _fmt_pool_book(res: dict) -> str:
+    lines = ["\U0001F30C <b>Universe validation complete.</b>"]
+    if res["new_assignments"]:
+        lines.append(f"\n\u2705 <b>{len(res['new_assignments'])} famil"
+                     f"{'ies' if len(res['new_assignments']) != 1 else 'y'} validated "
+                     f"across the whole book:</b>")
+        for r in res["new_assignments"]:
+            t = r["test"]
+            lines.append(f"\u2022 <b>{r['name']}</b> \u2014 {t['win_rate']*100:.0f}% win rate "
+                         f"on {t['n']} pooled unseen trades \u00b7 profit factor "
+                         f"{t['profit_factor']} \u00b7 ~{t['signals_per_week']} setups/wk "
+                         f"across the book")
+            lines.append(f"   Now firing signals from ANY watchlist asset it triggers on.")
+    else:
+        lines.append("\nNo family cleared the pooled bar. The bar does not move.")
+    if res["rejected"]:
+        lines.append(f"\n\U0001F6AB Rejected:")
+        for f in res["rejected"][:8]:
+            lines.append(f"\u2022 {_esc(f.get('name', f['family']))}: {_esc(f['reason'])}")
+    if res.get("standing"):
+        lines.append(f"\n\U0001F512 Standing universe families: {', '.join(res['standing'])}")
+    if res.get("ran_out_of_time"):
+        lines.append("\n\u23F3 Partial run \u2014 send /unilab again to continue.")
+    return "\n".join(lines)
+
+
+async def _run_pool_book(chat_id=None):
+    try:
+        cid = chat_id or TELEGRAM_CHAT_ID
+        res = await asyncio.to_thread(
+            analytics.pool_book, lambda msg: tg_send(cid, msg))
+        tg_send(cid, _fmt_pool_book(res))
+        if res["new_assignments"]:
+            notify("playbook", f"\U0001F30C {len(res['new_assignments'])} universe "
+                   f"famil{'ies' if len(res['new_assignments']) != 1 else 'y'} validated",
+                   ", ".join(r["name"] for r in res["new_assignments"]))
+    except Exception:
+        if chat_id:
+            tg_send(chat_id, "\u274C Universe lab failed \u2014 feed may be flaky. Try again.")
+
+
 async def _clock_loop():
     """NY-anchored scheduler: Digest 09:30 ET, Screener 16:15 ET, weekdays."""
     while True:
@@ -963,6 +1004,7 @@ async def _clock_loop():
                 if 1800 <= now.hour * 100 + now.minute < 1830 and not store.cooldown_active(lkey):
                     store.cooldown_set(lkey, 20)
                     await _run_lab_book()
+                    await _run_pool_book()
         except Exception:
             pass
         await asyncio.sleep(60)
@@ -981,6 +1023,7 @@ def tg_set_my_commands():
         {"command": "lab", "description": "Walk-forward test an asset (e.g. /lab nvda)"},
         {"command": "playbook", "description": "Your active validated strategies"},
         {"command": "labbook", "description": "Lab every unassigned asset \u2014 expand the playbook"},
+        {"command": "unilab", "description": "Validate strategy families across the whole book"},
         {"command": "candidates", "description": "Unvalidated fast-family leads"},
         {"command": "valid", "description": "Grade a trade idea (e.g. /valid sofi 16.5 short)"},
         {"command": "positions", "description": "Trades the Guardian is watching"},
@@ -1260,6 +1303,9 @@ def route_command(text: str) -> str:
     if cmd == "/labbook":
         return "__LABBOOK__"
 
+    if cmd == "/unilab":
+        return "__UNILAB__"
+
     if cmd == "/screener":
         s = store.get_screener()
         if not s.get("hits"):
@@ -1448,6 +1494,12 @@ async def telegram_webhook(
                 "unassigned asset, walk-forward, same thresholds. Results in a "
                 "couple of minutes.")
         asyncio.create_task(_run_lab_book(chat_id))
+        return {"ok": True}
+    if reply == "__UNILAB__":
+        tg_send(chat_id, "\U0001F30C <b>Pooled universe validation</b> \u2014 every "
+                "family graded on the whole book's combined out-of-sample record. "
+                "Same thresholds. A few minutes.")
+        asyncio.create_task(_run_pool_book(chat_id))
         return {"ok": True}
     if reply == "__LABMENU__":
         tg_send(chat_id, "\U0001F9EA Pick an asset to run the lab on:",

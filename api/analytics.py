@@ -454,9 +454,12 @@ def load_playbook() -> dict:
                 assignments = (json.load(f).get("assignments") or {})
         out = {}
         for key, a in assignments.items():
-            ticker, name, _ = qc.resolve_ticker(key)
             rec = {"key": key, "strategy": a.get("strategy"),
                    "strategy_name": a.get("name"), "assigned_at": a.get("assigned_at")}
+            if key.upper().startswith("UNIVERSE:"):
+                out[key.upper()] = rec
+                continue
+            ticker, name, _ = qc.resolve_ticker(key)
             out[key.upper()] = rec
             out[ticker.upper()] = rec
         return out
@@ -545,15 +548,18 @@ def assignment_for(asset: str):
 
 def scan_playbook() -> list:
     """The Monday-morning command: which ASSIGNED strategies are firing
-    on the current close? Returns only live hits."""
+    on the current close? Per-asset assignments first; then universe-
+    validated families sweep every remaining watchlist name."""
     hits, seen = [], set()
     pb = load_playbook()
+    covered = set()
     for rec in pb.values():
-        if rec["key"] in seen:
+        if rec["key"] in seen or rec["key"].startswith("UNIVERSE:"):
             continue
         seen.add(rec["key"])
         try:
             ticker, name, unit = qc.resolve_ticker(rec["key"])
+            covered.add(name.upper())
             side = _signals_today(ticker).get(rec["strategy"])
             if side:
                 q = qc.get_quote(ticker) or {}
@@ -563,6 +569,23 @@ def scan_playbook() -> list:
                              "side": side, "price": q.get("price")})
         except Exception:
             continue
+    uni = universe_assignments()
+    if uni:
+        for name, d in qc.load_watchlist().items():
+            if name.upper() in covered:
+                continue          # per-asset assignment outranks the universe sweep
+            try:
+                sig = _signals_today(d["ticker"])
+            except Exception:
+                continue
+            for fam, rec in uni.items():
+                side = sig.get(fam)
+                if side:
+                    q = qc.get_quote(d["ticker"]) or {}
+                    hits.append({"asset": name, "ticker": d["ticker"],
+                                 "strategy": fam,
+                                 "strategy_name": rec["strategy_name"] + " (universe)",
+                                 "side": side, "price": q.get("price")})
     return hits
 
 
@@ -692,3 +715,137 @@ def candidates() -> list:
     if truncated and out:
         out[-1]["scan_truncated"] = True
     return out
+
+
+# ── 12) POOLED UNIVERSE VALIDATION ───────────────────────────
+#     Rare-event families can't accumulate 10 OOS trades on one asset in
+#     an 18-month window — the granularity is wrong, not the bar. Pool
+#     every asset's out-of-sample trades and grade the FAMILY on the
+#     combined record. Same split, same thresholds, bigger sample, and
+#     cross-sectional robustness is a HARDER test than single-asset fit.
+def universe_assignments() -> dict:
+    """{family: rec} for universe-level assignments."""
+    return {k.split(":", 1)[1].lower(): v
+            for k, v in load_playbook().items() if k.startswith("UNIVERSE:")}
+
+
+def _pooled_stats(trades: list, seg_days: int) -> dict:
+    """Same math as the engine's stat block, computed over a pooled
+    trade list. Infinite profit factor reported as None, like everywhere."""
+    rets = [t["return_pct"] / 100 for t in trades]
+    wins = [r for r in rets if r > 0]
+    losses = [r for r in rets if r <= 0]
+    n = len(rets)
+    wr = len(wins) / n if n else 0.0
+    aw = float(np.mean(wins)) if wins else 0.0
+    al = float(np.mean(losses)) if losses else 0.0
+    exp = wr * aw + (1 - wr) * al
+    gl = abs((1 - wr) * al)
+    pf = (wr * aw / gl) if gl > 0 else (float("inf") if wr * aw > 0 else 0.0)
+    return {"n": n, "win_rate": round(wr, 4),
+            "profit_factor": None if pf == float("inf") else round(pf, 2),
+            "expectancy_pct": round(exp * 100, 2),
+            "signals_per_week": round(n / max(seg_days / 7.0, 1), 2)}
+
+
+def pooled_walk_forward(family: str, assets: list | None = None) -> dict:
+    names = assets if assets is not None else list(qc.load_watchlist().keys())
+    train_trades, test_trades, per_asset, seg_days = [], [], {}, 1
+    for name in names:
+        try:
+            ticker, _, _ = qc.resolve_ticker(name)
+            df = qc.fetch_history(ticker).dropna(
+                subset=["Baseline", "Upper_Band", "Lower_Band", "Macro_Filter"])
+            i = int(len(df) * LAB_SPLIT)
+            tr, _ = qc._run_backtest(ticker, family, df=df.iloc[:i])
+            te, _ = qc._run_backtest(ticker, family, df=df.iloc[i:])
+            train_trades += tr
+            test_trades += te
+            if te:
+                per_asset[name] = len(te)
+            seg_days = max(seg_days, (df.index[-1] - df.index[i]).days)
+        except Exception:
+            continue
+    train = _pooled_stats(train_trades, seg_days)
+    test = _pooled_stats(test_trades, seg_days)
+
+    reasons = []
+    if test["n"] < LAB_MIN_TEST_TRADES:
+        reasons.append(f"only {test['n']} pooled out-of-sample trades (< {LAB_MIN_TEST_TRADES})")
+    if test["win_rate"] < LAB_MIN_WIN_RATE:
+        reasons.append(f"pooled OOS win rate {test['win_rate']*100:.0f}% < {LAB_MIN_WIN_RATE*100:.0f}%")
+    pf_t = test["profit_factor"] if test["profit_factor"] is not None else 99
+    if pf_t < LAB_MIN_PF:
+        reasons.append(f"pooled OOS profit factor {pf_t} < {LAB_MIN_PF}")
+    if test["expectancy_pct"] <= 0:
+        reasons.append("pooled OOS expectancy is not positive")
+    pf_tr = train["profit_factor"] if train["profit_factor"] is not None else 99
+    if pf_tr < LAB_MIN_TRAIN_PF:
+        reasons.append("pooled in-sample segment was itself a loser (inconsistent)")
+
+    return {"family": family, "name": qc.STRATEGIES[family]["name"],
+            "train": train, "test": test, "per_asset": per_asset,
+            "validated": not reasons, "fail_reasons": reasons,
+            "note": "Pooled across the whole book \u2014 the family is the unit, "
+                    "identical thresholds, verdicts on unseen data only."}
+
+
+def pool_book(progress=None, budget_s: float | None = None) -> dict:
+    """Run pooled validation for every family without a universe
+    assignment. Fresh universe assignments obey the same 30-day lock."""
+    import os as _os
+    import time as _t
+    from datetime import date as _date
+    from api import store as _store
+    budget = budget_s if budget_s is not None else float(_os.getenv("LABBOOK_BUDGET_S", "480"))
+    deadline = _t.monotonic() + budget
+    lock_days = int(_os.getenv("RELAB_LOCK_DAYS", "30"))
+    uni = universe_assignments()
+
+    def _locked(rec) -> bool:
+        if not rec:
+            return False
+        try:
+            assigned = _date.fromisoformat(str(rec.get("assigned_at"))[:10])
+            return (_date.today() - assigned).days < lock_days
+        except Exception:
+            return True
+
+    new_assignments, rejected, standing, ran_out = [], [], [], False
+    todo = [f for f in qc.STRATEGIES if not _locked(uni.get(f))]
+    standing = [uni[f]["strategy_name"] if "strategy_name" in uni.get(f, {}) else f
+                for f in qc.STRATEGIES if _locked(uni.get(f))]
+    for i, fam in enumerate(todo):
+        if _t.monotonic() > deadline:
+            ran_out = True
+            break
+        if progress:
+            try:
+                progress(f"\U0001F30C Pooling {qc.STRATEGIES[fam]['name']} across the "
+                         f"book ({i + 1}/{len(todo)})\u2026")
+            except Exception:
+                pass
+        try:
+            r = pooled_walk_forward(fam)
+        except Exception:
+            rejected.append({"family": fam, "reason": "lab error (feed?)"})
+            continue
+        if r["validated"]:
+            today = _date.today().isoformat()
+            key = f"UNIVERSE:{fam}"
+            _store.save_playbook_assignment(key, fam, r["name"], today, r["test"])
+            try:
+                with open("playbook.json") as f:
+                    fpb = json.load(f)
+            except Exception:
+                fpb = {"assignments": {}}
+            fpb.setdefault("assignments", {})[key] = {
+                "strategy": fam, "name": r["name"], "assigned_at": today}
+            with open("playbook.json", "w") as f:
+                json.dump(fpb, f, indent=2)
+            new_assignments.append(r)
+        else:
+            rejected.append({"family": fam, "name": r["name"],
+                             "reason": r["fail_reasons"][0]})
+    return {"new_assignments": new_assignments, "rejected": rejected,
+            "standing": standing, "ran_out_of_time": ran_out}
