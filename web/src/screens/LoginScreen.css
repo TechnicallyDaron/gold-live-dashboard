@@ -317,6 +317,14 @@
   color: var(--bullion);
 }
 
+.portal-invite-only {
+  width: 100%;
+  margin: 4px 0 0;
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
+}
+
 .login-sent {
   display: flex;
   flex-direction: column;

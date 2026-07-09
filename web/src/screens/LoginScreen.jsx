@@ -2,8 +2,6 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import './LoginScreen.css'
 
-const MIN_PASSWORD_LENGTH = 8
-
 // Decorative only — static sample data, no live fetch pre-auth. Rendered as
 // slow-drifting, low-opacity rows behind the portal card.
 const DRIFT_ROWS = [
@@ -26,15 +24,11 @@ function MarketDrift() {
 }
 
 export default function LoginScreen({ dissolving = false, onDissolved, initialError = null }) {
-  const [mode, setMode] = useState('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState(initialError)
-  const [signupDone, setSignupDone] = useState(false)
   const [resetSent, setResetSent] = useState(false)
-
-  const isSignUp = mode === 'signup'
 
   // Fire once the CSS dissolve transition (see .portal-screen--dissolving)
   // has had time to play, then let the parent swap to the HUB.
@@ -46,31 +40,16 @@ export default function LoginScreen({ dissolving = false, onDissolved, initialEr
 
   const submit = async () => {
     if (!email.trim() || !password) return
-    if (isSignUp && password.length < MIN_PASSWORD_LENGTH) {
-      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`)
-      return
-    }
-
     setStatus('submitting')
     setError(null)
     try {
-      const { error: err } = isSignUp
-        ? await supabase.auth.signUp({ email: email.trim(), password })
-        : await supabase.auth.signInWithPassword({ email: email.trim(), password })
+      const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
       if (err) throw err
-      if (isSignUp) setSignupDone(true)
       setStatus('idle')
     } catch (err) {
       setError(err.message)
       setStatus('idle')
     }
-  }
-
-  const toggleMode = () => {
-    setMode(isSignUp ? 'signin' : 'signup')
-    setError(null)
-    setSignupDone(false)
-    setResetSent(false)
   }
 
   const requestReset = async () => {
@@ -120,73 +99,47 @@ export default function LoginScreen({ dissolving = false, onDissolved, initialEr
         <h1 className="login-title">N-CORE</h1>
         <p className="login-subtitle">Nyarko's Trade Manager</p>
 
-        {signupDone ? (
-          <div className="login-sent">
-            <span className="login-sent-icon">✓</span>
-            <p className="login-sent-text">
-              Account created for <strong>{email}</strong>. Sign in below.
-            </p>
-            <button type="button" className="login-submit" onClick={toggleMode}>
-              Back to sign in
-            </button>
-          </div>
-        ) : (
-          <>
-            <div className="login-field">
-              <input
-                className="login-input"
-                type="email"
-                placeholder="you@example.com"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && submit()}
-              />
-            </div>
+        <div className="login-field">
+          <input
+            className="login-input"
+            type="email"
+            placeholder="you@example.com"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && submit()}
+          />
+        </div>
 
-            <div className="login-field">
-              <input
-                className="login-input"
-                type="password"
-                placeholder={isSignUp ? `Password (min ${MIN_PASSWORD_LENGTH} chars)` : 'Password'}
-                autoComplete={isSignUp ? 'new-password' : 'current-password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && submit()}
-              />
-            </div>
+        <div className="login-field">
+          <input
+            className="login-input"
+            type="password"
+            placeholder="Password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && submit()}
+          />
+        </div>
 
-            {error && <p className="login-error">{error}</p>}
-            {resetSent && (
-              <p className="login-reset-sent">Password reset email sent — check your inbox.</p>
-            )}
+        {error && <p className="login-error">{error}</p>}
+        {resetSent && <p className="login-reset-sent">Password reset email sent — check your inbox.</p>}
 
-            <button
-              type="button"
-              className="login-submit"
-              disabled={!email.trim() || !password || status === 'submitting'}
-              onClick={submit}
-            >
-              {status === 'submitting'
-                ? isSignUp
-                  ? 'Creating account…'
-                  : 'Signing in…'
-                : isSignUp
-                  ? 'Create account'
-                  : 'Sign in'}
-            </button>
+        <button
+          type="button"
+          className="login-submit"
+          disabled={!email.trim() || !password || status === 'submitting'}
+          onClick={submit}
+        >
+          {status === 'submitting' ? 'Signing in…' : 'Sign in'}
+        </button>
 
-            {!isSignUp && (
-              <button type="button" className="login-toggle" onClick={requestReset}>
-                Forgot password?
-              </button>
-            )}
+        <button type="button" className="login-toggle" onClick={requestReset}>
+          Forgot password?
+        </button>
 
-            <button type="button" className="login-toggle" onClick={toggleMode}>
-              {isSignUp ? 'Have an account? Sign in' : 'Create account'}
-            </button>
-          </>
-        )}
+        <p className="portal-invite-only">Access is currently invite-only.</p>
       </div>
 
       <p className="portal-disclaimer">
