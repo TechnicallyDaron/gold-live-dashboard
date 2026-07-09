@@ -1,127 +1,127 @@
 {
   "Gold": {
     "state": "\u26aa NO TRADE",
-    "price": 4082.4,
-    "checked_at": "2026-07-08T21:47:25Z"
+    "price": 4123.3,
+    "checked_at": "2026-07-09T13:01:46Z"
   },
   "S&P 500": {
     "state": "\u26aa NO TRADE",
     "price": 7482.71,
-    "checked_at": "2026-07-08T21:47:25Z"
+    "checked_at": "2026-07-09T13:01:46Z"
   },
   "SOFI": {
     "state": "\u26aa NO TRADE",
     "price": 17.73,
-    "checked_at": "2026-07-08T21:47:25Z"
+    "checked_at": "2026-07-09T13:01:46Z"
   },
   "SPY": {
     "state": "\u26aa NO TRADE",
     "price": 745.4,
-    "checked_at": "2026-07-08T21:47:25Z"
+    "checked_at": "2026-07-09T13:01:46Z"
   },
   "QQQ": {
     "state": "\u26aa NO TRADE",
     "price": 711.44,
-    "checked_at": "2026-07-08T21:47:25Z"
+    "checked_at": "2026-07-09T13:01:46Z"
   },
   "IWM": {
     "state": "\u26aa NO TRADE",
     "price": 293.48,
-    "checked_at": "2026-07-08T21:47:25Z"
+    "checked_at": "2026-07-09T13:01:46Z"
   },
   "DIA": {
     "state": "\u26aa NO TRADE",
     "price": 522.77,
-    "checked_at": "2026-07-08T21:47:25Z"
+    "checked_at": "2026-07-09T13:01:46Z"
   },
   "GLD": {
     "state": "\u26aa NO TRADE",
     "price": 374.45,
-    "checked_at": "2026-07-08T21:47:25Z"
+    "checked_at": "2026-07-09T13:01:46Z"
   },
   "TLT": {
     "state": "\u26aa NO TRADE",
     "price": 84.36,
-    "checked_at": "2026-07-08T21:47:25Z"
+    "checked_at": "2026-07-09T13:01:46Z"
   },
   "USO": {
     "state": "\u26aa NO TRADE",
     "price": 112.21,
-    "checked_at": "2026-07-08T21:47:25Z"
+    "checked_at": "2026-07-09T13:01:46Z"
   },
   "NVDA": {
     "state": "\u26aa NO TRADE",
     "price": 204.12,
-    "checked_at": "2026-07-08T21:47:25Z"
+    "checked_at": "2026-07-09T13:01:46Z"
   },
   "TSLA": {
     "state": "\u26aa NO TRADE",
     "price": 394.06,
-    "checked_at": "2026-07-08T21:47:25Z"
+    "checked_at": "2026-07-09T13:01:46Z"
   },
   "AMD": {
     "state": "\u26aa NO TRADE",
     "price": 517.41,
-    "checked_at": "2026-07-08T21:47:25Z"
+    "checked_at": "2026-07-09T13:01:46Z"
   },
   "AAPL": {
     "state": "\u26aa NO TRADE",
     "price": 313.39,
-    "checked_at": "2026-07-08T21:47:25Z"
+    "checked_at": "2026-07-09T13:01:46Z"
   },
   "AMZN": {
     "state": "\u26aa NO TRADE",
     "price": 243.62,
-    "checked_at": "2026-07-08T21:47:25Z"
+    "checked_at": "2026-07-09T13:01:46Z"
   },
   "META": {
     "state": "\u26aa NO TRADE",
     "price": 603.12,
-    "checked_at": "2026-07-08T21:47:25Z"
+    "checked_at": "2026-07-09T13:01:46Z"
   },
   "MSFT": {
     "state": "\u26aa NO TRADE",
     "price": 383.34,
-    "checked_at": "2026-07-08T21:47:25Z"
+    "checked_at": "2026-07-09T13:01:46Z"
   },
   "NFLX": {
     "state": "\u26aa NO TRADE",
     "price": 75.59,
-    "checked_at": "2026-07-08T21:47:25Z"
+    "checked_at": "2026-07-09T13:01:46Z"
   },
   "GOOG": {
     "state": "\u26aa NO TRADE",
     "price": 358.71,
-    "checked_at": "2026-07-08T21:47:25Z"
+    "checked_at": "2026-07-09T13:01:46Z"
   },
   "DIS": {
     "state": "\u26aa NO TRADE",
     "price": 96.7,
-    "checked_at": "2026-07-08T21:47:25Z"
+    "checked_at": "2026-07-09T13:01:46Z"
   },
   "JPM": {
     "state": "\u26aa NO TRADE",
     "price": 330.62,
-    "checked_at": "2026-07-08T21:47:25Z"
+    "checked_at": "2026-07-09T13:01:46Z"
   },
   "V": {
     "state": "\u26aa NO TRADE",
     "price": 347.53,
-    "checked_at": "2026-07-08T21:47:25Z"
+    "checked_at": "2026-07-09T13:01:46Z"
   },
   "BABA": {
     "state": "\u26aa NO TRADE",
     "price": 108.98,
-    "checked_at": "2026-07-08T21:47:25Z"
+    "checked_at": "2026-07-09T13:01:46Z"
   },
   "COIN": {
     "state": "\u26aa NO TRADE",
     "price": 159.36,
-    "checked_at": "2026-07-08T21:47:25Z"
+    "checked_at": "2026-07-09T13:01:46Z"
   },
   "_meta": {
-    "last_digest": "2026-07-08",
-    "last_pulse": "2026-07-08T20:00:41+00:00",
+    "last_digest": "2026-07-09",
+    "last_pulse": "2026-07-09T13:01:46+00:00",
     "pulse_ref": {
       "Gold": {
         "z": -0.749909090142929,
