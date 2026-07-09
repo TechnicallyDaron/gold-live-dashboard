@@ -28,9 +28,19 @@ from collections import deque
 import quant_core as qc
 from api import ai
 from api import analytics
+from api import db, screener, store
 from pydantic import BaseModel
 import asyncio
 from datetime import date
+from zoneinfo import ZoneInfo
+
+NY = ZoneInfo("America/New_York")
+
+# ── DB-as-truth: when Supabase is configured, the ENGINE reads the
+#    operator's rows from Postgres; files remain the fallback. This single
+#    override makes agent/telegram/analytics DB-aware with zero edits.
+qc.load_watchlist = lambda: store.get_watchlist(store.resolve_user(None))
+qc.load_positions = lambda: store.get_positions(store.resolve_user(None))
 
 app = FastAPI(title="N-CORE Quant API", version="1.0.0")
 
@@ -286,6 +296,37 @@ def strategy_lab(asset: str):
         raise HTTPException(status_code=502, detail=f"Feed down for {asset}")
 
 
+# ── SUPABASE AUTH SCAFFOLD — zero new deps: verified over REST ──
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
+
+
+def get_current_user(authorization: str | None = Header(default=None)):
+    """FastAPI dependency. File-mode fallback FIRST: if Supabase env vars
+    are absent (both None, empty, or not set), return file-fallback. Only
+    demand bearer token if Supabase is actually configured."""
+    if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+        return {"id": "operator", "mode": "file-fallback"}
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Missing bearer token.")
+    token = authorization.split(" ", 1)[1]
+    try:
+        r = requests.get(f"{SUPABASE_URL}/auth/v1/user",
+                         headers={"apikey": SUPABASE_ANON_KEY,
+                                  "Authorization": f"Bearer {token}"}, timeout=8)
+    except Exception:
+        raise HTTPException(status_code=503, detail="Auth service unreachable.")
+    if r.status_code != 200:
+        raise HTTPException(status_code=401, detail="Invalid or expired session.")
+    return r.json()
+
+
+@app.get("/api/me")
+def me(user: dict = Depends(get_current_user)):
+    return {"user": {"id": user.get("id"), "email": user.get("email")},
+            "mode": user.get("mode", "supabase")}
+
+
 PERSISTENCE_WARNING = ("Saved to the live service. NOTE: Railway's filesystem resets on "
                        "every redeploy — commit important changes to GitHub, or wait for "
                        "the Supabase persistence phase.")
@@ -298,30 +339,34 @@ class WatchBody(BaseModel):
 
 
 @app.post("/api/watchlist")
-def add_watchlist(body: WatchBody):
-    wl = qc.load_watchlist()
+def add_watchlist(body: WatchBody, user: dict = Depends(get_current_user)):
+    uid = store.resolve_user(user)
+    wl = store.get_watchlist(uid)
     if body.name in wl:
         raise HTTPException(status_code=409, detail=f"'{body.name}' already tracked.")
     if qc.get_quote(body.ticker.upper()) is None:
         raise HTTPException(status_code=422, detail=f"{body.ticker.upper()} returned no data from the feed.")
-    wl[body.name] = {"ticker": body.ticker.upper(), "name": body.name, "unit": body.unit}
-    with open("watchlist.json", "w") as f:
-        _json.dump(wl, f, indent=2)
-    return {"watchlist": wl, "persistence_warning": PERSISTENCE_WARNING}
+    store.add_watchlist(uid, body.name, body.ticker.upper(), body.unit)
+    out = {"watchlist": store.get_watchlist(uid)}
+    if not uid:
+        out["persistence_warning"] = PERSISTENCE_WARNING
+    return out
 
 
 @app.delete("/api/watchlist/{name}")
-def remove_watchlist(name: str):
-    wl = qc.load_watchlist()
+def remove_watchlist(name: str, user: dict = Depends(get_current_user)):
+    uid = store.resolve_user(user)
+    wl = store.get_watchlist(uid)
     match = next((k for k in wl if k.lower() == name.lower()), None)
     if not match:
         raise HTTPException(status_code=404, detail=f"'{name}' not on the watchlist.")
     if len(wl) <= 1:
         raise HTTPException(status_code=409, detail="Cannot remove the last asset.")
-    del wl[match]
-    with open("watchlist.json", "w") as f:
-        _json.dump(wl, f, indent=2)
-    return {"watchlist": wl, "persistence_warning": PERSISTENCE_WARNING}
+    store.remove_watchlist(uid, match)
+    out = {"watchlist": store.get_watchlist(uid)}
+    if not uid:
+        out["persistence_warning"] = PERSISTENCE_WARNING
+    return out
 
 
 class PositionBody(BaseModel):
@@ -338,19 +383,23 @@ class PositionBody(BaseModel):
 
 
 @app.post("/api/positions")
-def add_position(body: PositionBody):
+def add_position(body: PositionBody, user: dict = Depends(get_current_user)):
     if body.contract_type.lower() not in ("call", "put"):
         raise HTTPException(status_code=422, detail="contract_type must be 'call' or 'put'.")
-    pos = qc.load_positions()
-    pid = f"{body.asset.lower()}_{body.contract_type.lower()}_{int(_time.time())}"
+    uid = store.resolve_user(user)
     rec = {k: v for k, v in body.dict().items() if v is not None}
     rec["asset"] = body.asset.upper()
     rec["type"] = rec.pop("contract_type").lower()
-    pos[pid] = rec
-    with open("positions.json", "w") as f:
-        _json.dump(pos, f, indent=2)
-    return {"id": pid, "position": rec, "shield_armed": bool(body.entry_date),
-            "persistence_warning": PERSISTENCE_WARNING}
+    pid = store.add_position(uid, rec)
+    out = {"id": pid, "position": rec, "shield_armed": bool(body.entry_date)}
+    if not uid:
+        out["persistence_warning"] = PERSISTENCE_WARNING
+    return out
+
+
+@app.get("/api/screener")
+def api_screener():
+    return store.get_screener()
 
 
 @app.get("/api/scan")
@@ -406,11 +455,11 @@ class CloseBody(BaseModel):
 
 
 @app.post("/api/positions/{pid}/close")
-def close_position(pid: str, body: CloseBody):
+def close_position(pid: str, body: CloseBody, user: dict = Depends(get_current_user)):
     pos = qc.load_positions()
     if pid not in pos:
         raise HTTPException(status_code=404, detail=f"Position '{pid}' not found.")
-    p = pos.pop(pid)
+    p = pos[pid]
     entry_prem = float(p.get("entry_premium") or p.get("entry") or 0)
     pnl_pct = (round((body.exit_premium - entry_prem) / entry_prem * 100, 2)
                if entry_prem else None)
@@ -439,21 +488,16 @@ def close_position(pid: str, body: CloseBody):
         "thesis": body.thesis, "rule_compliant": body.rule_compliant,
         "notes": body.notes, "logged_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
-    journal = _load_journal()
-    journal.append(entry)
-    with open(JOURNAL_FILE, "w") as f:
-        _json.dump(journal, f, indent=2)
-    with open("positions.json", "w") as f:
-        _json.dump(pos, f, indent=2)
+    store.close_position(store.resolve_user(user), pid, entry)
     notify("journal", f"\U0001F4D2 {entry['asset']} closed {pnl_pct:+.1f}%" if pnl_pct is not None
            else f"\U0001F4D2 {entry['asset']} closed", body.notes or "Logged to the journal.")
     return {"journal_entry": entry, "persistence_warning": PERSISTENCE_WARNING}
 
 
 @app.get("/api/journal")
-def api_journal():
+def api_journal(user: dict = Depends(get_current_user)):
     """Entries + behavioral aggregates: the operator's mirror."""
-    j = _load_journal()
+    j = store.get_journal(store.resolve_user(user))
     by_strat = {}
     for e in j:
         k = e.get("strategy_name") or "Unassigned"
@@ -477,35 +521,7 @@ def api_journal():
     return {"entries": j, "aggregates": aggregates}
 
 
-# ── SUPABASE AUTH SCAFFOLD — zero new deps: verified over REST ──
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 
-
-def get_current_user(authorization: str | None = Header(default=None)):
-    """FastAPI dependency. Verifies a Supabase JWT by asking Supabase.
-    Returns the user dict, or raises 401. File-mode fallback: if Supabase
-    isn't configured, the terminal stays single-operator (no auth wall)."""
-    if not (SUPABASE_URL and SUPABASE_ANON_KEY):
-        return {"id": "operator", "mode": "file-fallback"}
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(status_code=401, detail="Missing bearer token.")
-    token = authorization.split(" ", 1)[1]
-    try:
-        r = requests.get(f"{SUPABASE_URL}/auth/v1/user",
-                         headers={"apikey": SUPABASE_ANON_KEY,
-                                  "Authorization": f"Bearer {token}"}, timeout=8)
-    except Exception:
-        raise HTTPException(status_code=503, detail="Auth service unreachable.")
-    if r.status_code != 200:
-        raise HTTPException(status_code=401, detail="Invalid or expired session.")
-    return r.json()
-
-
-@app.get("/api/me")
-def me(user: dict = Depends(get_current_user)):
-    return {"user": {"id": user.get("id"), "email": user.get("email")},
-            "mode": user.get("mode", "supabase")}
 
 
 @app.get("/api/shield")
@@ -528,7 +544,9 @@ def exhaustion(asset: str):
 #   Interval floor 900s: faster polling risks the price feed banning
 #   us, which kills everything. Plain-honest language on every alert.
 # =====================================================================
-_agent_sent = set()
+# Restart-proof dedupe: cooldowns live in Postgres (store.cooldown_*),
+# so a redeploy can never re-fire the same alert (the IWM 4x bug).
+ALERT_COOLDOWN_H = float(os.getenv("ALERT_COOLDOWN_HOURS", "20"))
 
 
 def _agent_pass():
@@ -537,10 +555,10 @@ def _agent_pass():
 
     # 1) Playbook: assigned strategies firing on the live close
     for h in analytics.scan_playbook():
-        k = f"pb:{h['ticker']}:{h['side']}:{today}"
-        if k in _agent_sent:
+        k = f"pb:{h['ticker']}:{h['side']}"
+        if store.cooldown_active(k):
             continue
-        _agent_sent.add(k)
+        store.cooldown_set(k, ALERT_COOLDOWN_H)
         verb = "buy-the-dip" if h["side"] == "long" else "fade-the-spike"
         px = f" at ${h['price']:,.2f}" if h.get("price") else ""
         body = (f"{h['asset']}{px}: your validated {h['strategy_name']} strategy "
@@ -567,10 +585,10 @@ def _agent_pass():
         except Exception:
             continue
         if st.get("triggered"):
-            k = f"ex:{d['ticker']}:{st['side']}:{today}"
-            if k in _agent_sent:
+            k = f"ex:{d['ticker']}:{st['side']}"
+            if store.cooldown_active(k):
                 continue
-            _agent_sent.add(k)
+            store.cooldown_set(k, ALERT_COOLDOWN_H)
             caption = (f"\U0001F4B0 <b>TAKE PROFIT ALERT</b> \U0001F4B0\n\n"
                        f"{name} has reached extreme overextension exhaustion at "
                        f"${st['price']:,.2f}. Lock in options contract premium immediately.")
@@ -596,8 +614,8 @@ def _agent_pass():
         if rad.get("hijack") and rad.get("nearest"):
             ev = rad["nearest"]
             k = f"mr:{ev['event']}:{today}"
-            if k not in _agent_sent:
-                _agent_sent.add(k)
+            if not store.cooldown_active(k):
+                store.cooldown_set(k, ALERT_COOLDOWN_H)
                 body = (f"{ev['event']} hits in about {ev['minutes_remaining']} minutes. "
                         f"Big news like this can shake every asset on the board \u2014 "
                         f"setups armed into it carry extra gap risk.")
@@ -617,9 +635,117 @@ async def _agent_loop():
         await asyncio.sleep(max(AGENT_INTERVAL, 900))
 
 
+def _fmt_digest() -> str:
+    """The Daily Digest: conversational, top-4 HUB assets only, zero jargon."""
+    wl = qc.load_watchlist()
+    top4 = list(wl.items())[:4]
+    lines = ["\u2600\uFE0F <b>Good morning! Here's how your top assets look "
+             "heading into the open:</b>", ""]
+    firing = 0
+    for name, d in top4:
+        try:
+            b = qc.get_bias(d["ticker"])
+        except Exception:
+            lines.append(f"\u274C <b>{name}</b> \u2014 feed unreachable right now.")
+            continue
+        emoji, headline, _ = analytics.plain_state(b)
+        arrow = "\u2197\uFE0F" if "BULLISH" in b["trend"] else "\u2198\uFE0F"
+        first = headline.split("\u2014")[0].strip().rstrip(".")
+        lines.append(f"{emoji} <b>{name}</b> {arrow} ${b['price']:,.2f}{d.get('unit','')}"
+                     f" \u2014 {first}.")
+        a = analytics.assignment_for(name)
+        if a:
+            try:
+                if analytics._signals_today(d["ticker"]).get(a["strategy"]):
+                    firing += 1
+                    lines.append(f"    \u26A1 Your validated {a['strategy_name']} "
+                                 f"strategy is live on this one today.")
+            except Exception:
+                pass
+    lines.append("")
+    lines.append("\U0001F3AF A playbook setup is live \u2014 check the app."
+                 if firing else
+                 "\U0001F634 No validated setups at the bell. Patience pays.")
+    lines.append("<i>Statistics, not certainties \u2014 have a great session.</i>")
+    return "\n".join(lines)
+
+
+async def _run_daily_screener():
+    """Post-close Catalyst Screener on completed bars, then alert fresh hits."""
+    hits = await asyncio.to_thread(screener.run_screener)
+    scan_date = datetime.now(NY).date().isoformat()
+    store.save_screener(scan_date, hits)
+    fresh = [h for h in hits if not store.cooldown_active(f"scr:{h['ticker']}")]
+    for h in fresh:
+        store.cooldown_set(f"scr:{h['ticker']}", 144)   # 6 days: one alert per breakout
+    if fresh and TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
+        lines = [f"\U0001F680 <b>Catalyst Screener \u2014 {len(fresh)} fresh "
+                 f"52-week breakout{'s' if len(fresh) != 1 else ''} on \u2265"
+                 f"{screener.RVOL_MIN:g}\u00D7 volume today:</b>"]
+        for h in fresh[:10]:
+            lines.append(f"\u2022 <b>{h['ticker']}</b> ${h['price']:,.2f} \u2014 "
+                         f"{h['rvol']:.1f}\u00D7 normal volume, broke out {h['breakout_date']}")
+        lines.append("<i>Breakout confluence, not advice \u2014 run /lab before trading any.</i>")
+        tg_send(TELEGRAM_CHAT_ID, "\n".join(lines))
+        notify("screener", f"\U0001F680 {len(fresh)} fresh breakouts",
+               ", ".join(h["ticker"] for h in fresh[:10]))
+    return hits
+
+
+async def _clock_loop():
+    """NY-anchored scheduler: Digest 09:30 ET, Screener 16:15 ET, weekdays."""
+    while True:
+        try:
+            now = datetime.now(NY)
+            if now.weekday() < 5 and os.getenv("AGENT", "on") != "off":
+                hhmm = now.hour * 100 + now.minute
+                dkey = f"digest:{now.date().isoformat()}"
+                if 930 <= hhmm < 945 and not store.cooldown_active(dkey):
+                    store.cooldown_set(dkey, 20)
+                    if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
+                        tg_send(TELEGRAM_CHAT_ID, _fmt_digest())
+                skey = f"screener:{now.date().isoformat()}"
+                if 1615 <= hhmm < 1645 and not store.cooldown_active(skey):
+                    store.cooldown_set(skey, 20)
+                    await _run_daily_screener()
+        except Exception:
+            pass
+        await asyncio.sleep(60)
+
+
+def tg_set_my_commands():
+    """Native Telegram command menu (the clean three-line menu button) —
+    replaces the screen-hogging reply keyboard entirely."""
+    if not TELEGRAM_BOT_TOKEN:
+        return False
+    cmds = [
+        {"command": "status", "description": "Your whole board in one glance"},
+        {"command": "bias", "description": "Full read on one asset (e.g. /bias gold)"},
+        {"command": "scan", "description": "Any validated playbook setups today?"},
+        {"command": "screener", "description": "Fresh 52-week breakout catalysts"},
+        {"command": "lab", "description": "Walk-forward test an asset (e.g. /lab nvda)"},
+        {"command": "playbook", "description": "Your active validated strategies"},
+        {"command": "candidates", "description": "Unvalidated fast-family leads"},
+        {"command": "valid", "description": "Grade a trade idea (e.g. /valid sofi 16.5 short)"},
+        {"command": "positions", "description": "Trades the Guardian is watching"},
+        {"command": "journal", "description": "Your trade history + win rate"},
+        {"command": "macro", "description": "Big economic events this week"},
+        {"command": "ask", "description": "Ask anything about an asset"},
+        {"command": "help", "description": "What everything does, in plain English"},
+    ]
+    try:
+        r = requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/setMyCommands",
+                          json={"commands": cmds}, timeout=10)
+        return r.status_code == 200
+    except Exception:
+        return False
+
+
 @app.on_event("startup")
 async def _start_background():
+    tg_set_my_commands()
     asyncio.create_task(_agent_loop())
+    asyncio.create_task(_clock_loop())
 
 
 # =====================================================================
@@ -835,6 +961,18 @@ def route_command(text: str) -> str:
                          f"<b>{h['strategy_name']}</b> is firing a {verb} ({h['side'].upper()}) setup.")
         return "\n".join(lines)
 
+    if cmd == "/screener":
+        s = store.get_screener()
+        if not s.get("hits"):
+            return ("\U0001F680 <b>Catalyst Screener:</b> no fresh 52-week "
+                    "breakouts on elevated volume in the latest scan "
+                    f"({s.get('scan_date') or 'no scan yet'}). Scarcity is the filter working.")
+        lines = [f"\U0001F680 <b>Catalyst Screener \u2014 {s['scan_date']}:</b>"]
+        for h in s["hits"][:10]:
+            lines.append(f"\u2022 <b>{h['ticker']}</b> ${h['price']:,.2f} \u2014 "
+                         f"{h['rvol']:.1f}\u00D7 volume, broke out {h['breakout_date']}")
+        return "\n".join(lines)
+
     if cmd == "/candidates":
         cands = analytics.candidates()
         if not cands:
@@ -1006,7 +1144,9 @@ async def telegram_webhook(
         tg_send(chat_id, "\U0001F9EA Pick an asset to run the lab on:",
                 reply_markup=asset_inline_keyboard("lab"))
     elif text.strip().split("@")[0].lower() == "/start":
-        tg_send(chat_id, reply, reply_markup=MAIN_KEYBOARD)
+        # Reply keyboards are retired: remove any lingering one and point
+        # to the native command menu (the \u2630 button beside the input).
+        tg_send(chat_id, reply, reply_markup={"remove_keyboard": True})
     else:
         tg_send(chat_id, reply)
     return {"ok": True}
