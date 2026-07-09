@@ -109,6 +109,11 @@ def close_position(user_id: str | None, pid: str, journal_entry: dict) -> None:
         je["user_id"] = user_id
         je.pop("id", None)
         je["contract_type"] = je.pop("type", None)   # column-name mapping
+        allowed = {"user_id", "position_id", "asset", "contract_type", "strike",
+                   "entry_date", "exit_date", "entry_premium", "exit_premium",
+                   "pnl_pct", "holding_days", "strategy", "strategy_name",
+                   "verdict_at_close", "thesis", "rule_compliant", "notes", "logged_at"}
+        je = {k: v for k, v in je.items() if k in allowed}   # Postgres rejects unknowns
         db.insert("journal", je)
         db.update("positions", {"user_id": user_id, "id": pid},
                   {"status": "closed"})

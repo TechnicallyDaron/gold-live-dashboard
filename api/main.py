@@ -459,7 +459,8 @@ class CloseBody(BaseModel):
 
 @app.post("/api/positions/{pid}/close")
 def close_position(pid: str, body: CloseBody, user: dict = Depends(get_current_user)):
-    pos = qc.load_positions()
+    uid = store.resolve_user(user)
+    pos = store.get_positions(uid)
     if pid not in pos:
         raise HTTPException(status_code=404, detail=f"Position '{pid}' not found.")
     p = pos[pid]
@@ -491,7 +492,7 @@ def close_position(pid: str, body: CloseBody, user: dict = Depends(get_current_u
         "thesis": body.thesis, "rule_compliant": body.rule_compliant,
         "notes": body.notes, "logged_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
-    store.close_position(store.resolve_user(user), pid, entry)
+    store.close_position(uid, pid, entry)
     notify("journal", f"\U0001F4D2 {entry['asset']} closed {pnl_pct:+.1f}%" if pnl_pct is not None
            else f"\U0001F4D2 {entry['asset']} closed", body.notes or "Logged to the journal.")
     return {"journal_entry": entry, "persistence_warning": PERSISTENCE_WARNING}

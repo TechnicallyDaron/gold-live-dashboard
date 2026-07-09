@@ -620,35 +620,29 @@ def render_chart_card(ticker: str, title: str, entry: float | None = None,
 # ── 10) CANDIDATES — breadth scan of the fast families, UNVALIDATED ──
 def candidates() -> list:
     """On-demand velocity scan across the whole watchlist for the fast
-    families (pullback, rsi2). Explicitly UNVALIDATED: these are leads
-    for /lab, never signals. Auto-broadcasting them would poison the
-    track record. Timeout: 5s circuit-breaker on yfinance network latency."""
-    import signal
-    out = []
-    
-    def timeout_handler(signum, frame):
-        raise TimeoutError("Candidates scan exceeded 5s budget")
-    
-    signal.signal(signal.SIGALRM, timeout_handler)
-    signal.alarm(5)
-    
-    try:
-        for name, d in qc.load_watchlist().items():
-            try:
-                sig = _signals_today(d["ticker"])
-            except Exception:
-                continue
-            for fam in ("pullback", "rsi2"):
-                side = sig.get(fam)
-                if side:
-                    q = qc.get_quote(d["ticker"]) or {}
-                    out.append({"asset": name, "ticker": d["ticker"], "family": fam,
-                                "family_name": qc.STRATEGIES[fam]["name"],
-                                "side": side, "price": q.get("price"),
-                                "validated": bool(assignment_for(name) and
-                                                  assignment_for(name)["strategy"] == fam)})
-    except TimeoutError:
-        pass
-    finally:
-        signal.alarm(0)
+    families (pullback, rsi2). Explicitly UNVALIDATED: leads for /lab,
+    never signals. Thread-safe 12s deadline (signal alarms crash in a
+    threadpool): returns partial results instead of hanging."""
+    import time as _t
+    deadline = _t.monotonic() + float(os.getenv("CANDIDATES_BUDGET_S", "12"))
+    out, truncated = [], False
+    for name, d in qc.load_watchlist().items():
+        if _t.monotonic() > deadline:
+            truncated = True
+            break
+        try:
+            sig = _signals_today(d["ticker"])
+        except Exception:
+            continue
+        for fam in ("pullback", "rsi2"):
+            side = sig.get(fam)
+            if side:
+                q = qc.get_quote(d["ticker"]) or {}
+                out.append({"asset": name, "ticker": d["ticker"], "family": fam,
+                            "family_name": qc.STRATEGIES[fam]["name"],
+                            "side": side, "price": q.get("price"),
+                            "validated": bool(assignment_for(name) and
+                                              assignment_for(name)["strategy"] == fam)})
+    if truncated and out:
+        out[-1]["scan_truncated"] = True
     return out
