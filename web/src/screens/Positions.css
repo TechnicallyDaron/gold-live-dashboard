@@ -2,6 +2,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  /* Extra breathing room below the safe-area inset — .app-content's own
+     top padding alone crowds the header against a notch/dynamic island. */
+  margin-top: 14px;
   margin-bottom: 16px;
 }
 
