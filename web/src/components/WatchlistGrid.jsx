@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import CompactWatchlistCard from './CompactWatchlistCard.jsx'
 import AddTile from './AddTile.jsx'
 import './WatchlistGrid.css'
@@ -11,12 +12,39 @@ function chunk4(items) {
   return pages
 }
 
+// Neutral/no-trade bias (gray = "⚪ NO TRADE"), not playbook-firing, and not
+// a current screener hit — nothing about this asset needs attention right
+// now, so it collapses out of the paginated grid.
+function isQuiet(name, watchlist, byAsset, screenerTickers) {
+  const bias = byAsset?.[name]?.bias
+  const isNeutral = !bias || bias.color === 'gray'
+  const isFiring = !!(bias?.assigned_strategy && bias?.signaling_today)
+  const ticker = (watchlist[name]?.ticker || name).toUpperCase()
+  return isNeutral && !isFiring && !screenerTickers.has(ticker)
+}
+
+const EMPTY_SET = new Set()
+
 export default function WatchlistGrid({
-  watchlist, names, byAsset, loading, flashKeys, onLongPress, onAddClick,
+  watchlist, names, byAsset, loading, flashKeys, screenerTickers = EMPTY_SET, onLongPress, onAddClick,
 }) {
+  const navigate = useNavigate()
   const scrollRef = useRef(null)
   const [page, setPage] = useState(0)
-  const pages = chunk4([...names, ADD_TILE])
+  const [quietOpen, setQuietOpen] = useState(false)
+
+  // Can't classify quiet vs active until bias data has loaded at least
+  // once — until then, everything renders in the active grid as loading
+  // skeletons (matching prior behavior) rather than guessing.
+  const canClassify = !!byAsset
+  const activeNames = canClassify
+    ? names.filter((n) => !isQuiet(n, watchlist, byAsset, screenerTickers))
+    : names
+  const quietNames = canClassify
+    ? names.filter((n) => isQuiet(n, watchlist, byAsset, screenerTickers))
+    : []
+
+  const pages = chunk4([...activeNames, ADD_TILE])
 
   const onScroll = () => {
     const el = scrollRef.current
@@ -83,6 +111,38 @@ export default function WatchlistGrid({
           </div>
         )}
       </div>
+
+      {quietNames.length > 0 && (
+        <div className="wg-quiet">
+          <button type="button" className="wg-quiet-toggle" onClick={() => setQuietOpen((v) => !v)}>
+            <span>😴 Quiet ({quietNames.length})</span>
+            <span className={quietOpen ? 'wg-quiet-caret wg-quiet-caret--open' : 'wg-quiet-caret'}>▾</span>
+          </button>
+          {quietOpen && (
+            <div className="wg-quiet-list">
+              {quietNames.map((name) => {
+                const quote = byAsset?.[name]?.quote
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    className="wg-quiet-item"
+                    onClick={() => navigate(`/bias/${encodeURIComponent(name)}`)}
+                  >
+                    <span className="wg-quiet-item-name">{name}</span>
+                    {quote && (
+                      <span className="wg-quiet-item-price tabular-nums">
+                        ${quote.price?.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                        {watchlist[name].unit}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

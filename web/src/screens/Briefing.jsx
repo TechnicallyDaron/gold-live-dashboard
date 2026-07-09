@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useWatchlist } from '../lib/useWatchlist.js'
 import { useWatchlistData } from '../lib/useWatchlistData.js'
 import { useMacro } from '../lib/useMacro.js'
 import { useMacroRadar } from '../lib/useMacroRadar.js'
+import { useScreener } from '../lib/useScreener.js'
 import { useNotifications } from '../lib/useNotifications.js'
 import { matchAssetKey } from '../lib/matchAsset.js'
 import { api } from '../lib/api.js'
@@ -24,6 +25,7 @@ export default function Briefing() {
   const { watchlist, error: watchlistError, setWatchlist } = useWatchlist()
   const { data: macroEvents, loading: macroLoading } = useMacro()
   const { data: radar } = useMacroRadar()
+  const { hits: screenerHits } = useScreener()
   const { items: notifications } = useNotifications()
   const [quickLook, setQuickLook] = useState(null)
   const [flashKeys, setFlashKeys] = useState(new Set())
@@ -33,6 +35,10 @@ export default function Briefing() {
 
   const names = watchlist ? Object.keys(watchlist) : []
   const { data: byAsset, loading: dataLoading } = useWatchlistData(names)
+  const screenerTickers = useMemo(
+    () => new Set(screenerHits.map((h) => h.ticker.toUpperCase())),
+    [screenerHits]
+  )
 
   const hijack = radar?.hijack && radar?.nearest
 
@@ -104,6 +110,7 @@ export default function Briefing() {
         byAsset={byAsset}
         loading={dataLoading}
         flashKeys={flashKeys}
+        screenerTickers={screenerTickers}
         onLongPress={setRemoveTarget}
         onAddClick={() => setShowAddForm(true)}
       />

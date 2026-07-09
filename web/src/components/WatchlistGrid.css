@@ -51,3 +51,64 @@
 .wg-dot--active {
   background: var(--bullion);
 }
+
+.wg-quiet {
+  flex-shrink: 0;
+  margin-top: 10px;
+}
+
+.wg-quiet-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--panel-top);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.wg-quiet-caret {
+  font-size: 11px;
+  transition: transform 0.2s ease;
+}
+
+.wg-quiet-caret--open {
+  transform: rotate(180deg);
+}
+
+.wg-quiet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.wg-quiet-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.wg-quiet-item-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.wg-quiet-item-price {
+  font-size: 13px;
+  color: var(--muted);
+}

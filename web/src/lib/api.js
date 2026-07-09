@@ -74,6 +74,7 @@ export const api = {
   closePosition: (id, body) => postJSON(`/api/positions/${encodeURIComponent(id)}/close`, body),
   journal: () => request('/api/journal'),
   candidates: () => request('/api/candidates'),
+  screener: () => request('/api/screener'),
   strategyLab: (asset) => request(`/api/strategy-lab/${encodeURIComponent(asset)}`),
   optimizedEdge: (asset) => request(`/api/optimized-edge/${encodeURIComponent(asset)}`),
   me: () => request('/api/me'),
