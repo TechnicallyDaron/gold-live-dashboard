@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { api } from '../lib/api.js'
 import { showToast } from '../lib/toast.js'
+import { useRiskSettings } from '../lib/useRiskSettings.js'
 import BottomSheet from './BottomSheet.jsx'
 import './FormField.css'
+import './PositionForm.css'
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
 
@@ -20,8 +22,16 @@ export default function PositionForm({ watchlist, onClose, onSaved }) {
   const [invalBelow, setInvalBelow] = useState('')
   const [error, setError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
+  const [riskSettings, setRiskSettings] = useRiskSettings()
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   const canSubmit = asset && strike && entryPremium && entryDate && expiration && !submitting
+
+  // Purely informational — never gates canSubmit above.
+  const premiumNum = parseFloat(entryPremium)
+  const maxDollarRisk = riskSettings.accountSize * (riskSettings.maxPct / 100)
+  const maxContracts =
+    riskSettings.accountSize > 0 && premiumNum > 0 ? Math.floor(maxDollarRisk / (premiumNum * 100)) : null
 
   const submit = async () => {
     setError(null)
@@ -54,6 +64,42 @@ export default function PositionForm({ watchlist, onClose, onSaved }) {
 
   return (
     <BottomSheet title="Log Position" onClose={onClose}>
+      <button
+        type="button"
+        className="ps-settings-toggle"
+        onClick={() => setSettingsOpen((v) => !v)}
+      >
+        <span>⚙️ Risk settings</span>
+        <span className="ps-settings-summary tabular-nums">
+          ${riskSettings.accountSize.toLocaleString()} · {riskSettings.maxPct}% max
+        </span>
+      </button>
+
+      {settingsOpen && (
+        <div className="ps-settings-panel field-row">
+          <div className="field">
+            <span className="field-label">Account Size</span>
+            <input
+              className="field-input" type="number" inputMode="decimal" placeholder="10000"
+              value={riskSettings.accountSize || ''}
+              onChange={(e) =>
+                setRiskSettings((s) => ({ ...s, accountSize: parseFloat(e.target.value) || 0 }))
+              }
+            />
+          </div>
+          <div className="field">
+            <span className="field-label">Max % / Trade</span>
+            <input
+              className="field-input" type="number" inputMode="decimal" placeholder="25"
+              value={riskSettings.maxPct || ''}
+              onChange={(e) =>
+                setRiskSettings((s) => ({ ...s, maxPct: parseFloat(e.target.value) || 0 }))
+              }
+            />
+          </div>
+        </div>
+      )}
+
       <div className="field">
         <span className="field-label">Asset</span>
         <select className="field-select" value={asset} onChange={(e) => setAsset(e.target.value)}>
@@ -100,6 +146,19 @@ export default function PositionForm({ watchlist, onClose, onSaved }) {
           className="field-input" type="number" inputMode="decimal" placeholder="1.04"
           value={entryPremium} onChange={(e) => setEntryPremium(e.target.value)}
         />
+        {maxContracts !== null && (
+          maxContracts > 0 ? (
+            <p className="ps-size-hint">
+              Max: {maxContracts} contract{maxContracts === 1 ? '' : 's'} (≤ $
+              {maxDollarRisk.toLocaleString(undefined, { maximumFractionDigits: 2 })} of your $
+              {riskSettings.accountSize.toLocaleString()} account)
+            </p>
+          ) : (
+            <p className="ps-size-hint ps-size-hint--warn">
+              This contract exceeds your risk settings.
+            </p>
+          )
+        )}
       </div>
 
       <div className="field-row">

@@ -1,0 +1,35 @@
+.ps-settings-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--panel-top);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ps-settings-summary {
+  color: var(--text);
+}
+
+.ps-settings-panel {
+  margin-bottom: 14px;
+}
+
+.ps-size-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ps-size-hint--warn {
+  color: var(--watch);
+  font-weight: 600;
+}
