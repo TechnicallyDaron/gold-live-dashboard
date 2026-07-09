@@ -31,7 +31,13 @@ export default function ClosePositionForm({ position, onClose, onSaved }) {
         pct != null ? `📒 Position closed — ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%` : '📒 Position closed',
         pct != null ? (pct >= 0 ? 'success' : 'error') : 'default'
       )
-      if (res.persistence_warning) showToast(res.persistence_warning, 'warning')
+      // DB mode: no persistence_warning, so confirm the journal entry is
+      // durable. File mode: keep the existing amber "not durably saved" cue.
+      if (res.persistence_warning) {
+        showToast(res.persistence_warning, 'warning')
+      } else {
+        showToast('🛡 Logged permanently', 'success')
+      }
       onSaved?.()
       onClose()
     } catch (err) {
