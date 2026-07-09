@@ -106,16 +106,20 @@
   cursor: default;
 }
 
-.login-google {
+.login-toggle {
   width: 100%;
-  padding: 13px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
+  padding: 10px;
+  border: none;
   background: transparent;
   color: var(--muted);
   font-size: 13px;
   font-weight: 600;
-  cursor: not-allowed;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.login-toggle:hover {
+  color: var(--volt);
 }
 
 .login-sent {
