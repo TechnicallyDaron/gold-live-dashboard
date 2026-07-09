@@ -105,6 +105,7 @@ def close_position(user_id: str | None, pid: str, journal_entry: dict) -> None:
         je = dict(journal_entry)
         je["user_id"] = user_id
         je.pop("id", None)
+        je.pop("expiration", None)   # not a journal column (schema.sql)
         je["contract_type"] = je.pop("type", None)   # column-name mapping
         db.insert("journal", je)
         db.update("positions", {"user_id": user_id, "id": pid},
