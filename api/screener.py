@@ -25,19 +25,29 @@ def load_universe() -> list:
         return []
 
 
+CHUNK = int(os.getenv("SCREENER_CHUNK", "40"))
+
+
 def _download_universe(tickers: list) -> dict:
-    """Seam. Batch daily download, ~14 months. Returns {ticker: df} with
-    Open/High/Low/Close/Volume."""
-    raw = yf.download(tickers, period="14mo", interval="1d", group_by="ticker",
-                      auto_adjust=False, progress=False, threads=True)
+    """Seam. CHUNKED daily download (~14 months) so memory stays flat on a
+    small container — a single 298-ticker megabatch OOM-kills Railway."""
     out = {}
-    for t in tickers:
+    for i in range(0, len(tickers), CHUNK):
+        batch = tickers[i:i + CHUNK]
         try:
-            df = raw[t].dropna(subset=["Close"])
-            if len(df) >= 260:
-                out[t] = df
+            raw = yf.download(batch, period="14mo", interval="1d",
+                              group_by="ticker", auto_adjust=False,
+                              progress=False, threads=True)
         except Exception:
             continue
+        for t in batch:
+            try:
+                df = raw[t].dropna(subset=["Close"])
+                if len(df) >= 260:
+                    out[t] = df[["Open", "High", "Low", "Close", "Volume"]].copy()
+            except Exception:
+                continue
+        del raw
     return out
 
 
