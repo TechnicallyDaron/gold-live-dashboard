@@ -267,8 +267,26 @@ class AskBody(BaseModel):
     question: str
 
 
+_ai_usage: dict = {}
+
+
+def _ai_gate(user: dict):
+    """Per-user daily AI budget. The operator (whose key pays the bill) is
+    exempt; every other account gets AI_USER_DAILY_LIMIT calls/day."""
+    uid = user.get("id", "operator")
+    if uid in ("operator", store.OPERATOR):
+        return
+    key = f"{uid}:{date.today().isoformat()}"
+    used = _ai_usage.get(key, 0)
+    if used >= int(os.getenv("AI_USER_DAILY_LIMIT", "20")):
+        raise HTTPException(status_code=429,
+                            detail="Daily AI limit reached for your account — resets at midnight ET.")
+    _ai_usage[key] = used + 1
+
+
 @app.post("/api/ask")
-def api_ask(body: AskBody):
+def api_ask(body: AskBody, user: dict = Depends(get_current_user)):
+    _ai_gate(user)
     try:
         return {"answer": ai.ask(body.asset, body.question),
                 "usage": ai.usage_today()}
@@ -279,7 +297,8 @@ def api_ask(body: AskBody):
 
 
 @app.get("/api/sentiment/{asset}")
-def api_sentiment(asset: str):
+def api_sentiment(asset: str, user: dict = Depends(get_current_user)):
+    _ai_gate(user)
     try:
         return ai.sentiment(asset)
     except ai.AIUnavailable:
@@ -308,7 +327,8 @@ class ValidateBody(BaseModel):
 
 
 @app.post("/api/validate")
-def api_validate(body: ValidateBody):
+def api_validate(body: ValidateBody, user: dict = Depends(get_current_user)):
+    _ai_gate(user)
     try:
         return {**ai.validate(body.asset, body.entry, body.side), "usage": ai.usage_today()}
     except ai.AIUnavailable:
@@ -493,8 +513,8 @@ def close_position(pid: str, body: CloseBody, user: dict = Depends(get_current_u
         "notes": body.notes, "logged_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
     store.close_position(uid, pid, entry)
-    notify("journal", f"\U0001F4D2 {entry['asset']} closed {pnl_pct:+.1f}%" if pnl_pct is not None
-           else f"\U0001F4D2 {entry['asset']} closed", body.notes or "Logged to the journal.")
+    # No global notification here: closes are private to the account.
+    # The in-app toast confirms; the journal is the record.
     return {"journal_entry": entry, "persistence_warning": PERSISTENCE_WARNING}
 
 
