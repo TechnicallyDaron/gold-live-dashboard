@@ -1,3 +1,5 @@
+import { authGateEnabled, supabase } from './supabase.js'
+
 const BASE_URL = import.meta.env.VITE_API_URL || ''
 
 class ApiError extends Error {
@@ -7,16 +9,21 @@ class ApiError extends Error {
   }
 }
 
-// Set by useAuth once a Supabase session exists; every request attaches it.
-// Stays null in file-mode (no auth gate configured), matching prior behavior.
-let authToken = null
-export function setAuthToken(token) {
-  authToken = token
+// Pulled fresh on every request rather than cached from auth state, so a
+// token that expired between renders is refreshed (getSession refreshes
+// internally when needed) instead of sending a stale bearer that 401s.
+// Stays absent in file-mode (no auth gate configured), matching prior
+// behavior with no per-call duplication at the watchlist/position/journal
+// call sites below.
+async function authHeaders() {
+  if (!authGateEnabled) return {}
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token
+  return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
 async function request(path, options = {}) {
-  const headers = { ...(options.headers || {}) }
-  if (authToken) headers.Authorization = `Bearer ${authToken}`
+  const headers = { ...(await authHeaders()), ...(options.headers || {}) }
   const res = await fetch(`${BASE_URL}${path}`, { ...options, headers })
   if (!res.ok) {
     let detail = res.statusText

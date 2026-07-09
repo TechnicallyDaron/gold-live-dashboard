@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { authGateEnabled, supabase } from './supabase.js'
-import { api, setAuthToken } from './api.js'
+import { api } from './api.js'
 
 export function useAuth() {
   const [session, setSession] = useState(null)
@@ -24,10 +24,10 @@ export function useAuth() {
 
   useEffect(() => {
     if (!authGateEnabled) return
-    setAuthToken(session?.access_token || null)
     if (session?.access_token) {
       // Verify once against the backend — confirms the token is actually
-      // accepted, not just present.
+      // accepted, not just present. api.js attaches the bearer itself via
+      // supabase.auth.getSession().
       api
         .me()
         .then((r) => setUser(r.user))
