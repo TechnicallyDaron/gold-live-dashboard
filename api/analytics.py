@@ -277,6 +277,10 @@ def theta_shield(positions: dict | None = None) -> list:
                 "horizon_days": horizon, "elapsed_days": elapsed,
                 "pct_exhausted": pct, "status": status,
             }
+            ed = qc.get_next_earnings(ticker)
+            rec["earnings"] = {"date": ed,
+                               "before_expiry": bool(ed and p.get("expiration")
+                                                     and ed <= p["expiration"])}
             # ── Live PnL: REAL option premium only. Never spot-derived. ──
             entry_prem = p.get("entry_premium") or p.get("entry")
             live = None

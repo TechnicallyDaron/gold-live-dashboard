@@ -237,3 +237,66 @@ def save_playbook_assignment(key: str, strategy: str, strategy_name: str,
             db.upsert("playbooks", row, on_conflict="user_id,asset_key")
         except Exception:
             pass
+
+
+# ── SIGNAL LEDGER: the machine's own track record ───────────
+LEDGER_FILE = "ledger.json"
+
+
+def _ledger_file():
+    try:
+        with open(LEDGER_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def save_signal(rec: dict) -> None:
+    if db.enabled():
+        try:
+            db.insert("signal_ledger", rec)
+            return
+        except Exception:
+            pass
+    led = _ledger_file()
+    rec = dict(rec)
+    rec["id"] = (max((e.get("id", 0) for e in led), default=0) + 1)
+    rec["status"] = rec.get("status", "open")
+    led.append(rec)
+    with open(LEDGER_FILE, "w") as f:
+        json.dump(led, f, indent=2)
+
+
+def get_open_signals() -> list:
+    if db.enabled():
+        try:
+            return db.select("signal_ledger", {"status": "open"})
+        except Exception:
+            return []
+    return [e for e in _ledger_file() if e.get("status", "open") == "open"]
+
+
+def resolve_signal(sid, status: str, resolved_date: str, resolve_price, result_pct) -> None:
+    patch = {"status": status, "resolved_date": resolved_date,
+             "resolve_price": resolve_price, "result_pct": result_pct}
+    if db.enabled():
+        try:
+            db.update("signal_ledger", {"id": sid}, patch)
+            return
+        except Exception:
+            pass
+    led = _ledger_file()
+    for e in led:
+        if e.get("id") == sid:
+            e.update(patch)
+    with open(LEDGER_FILE, "w") as f:
+        json.dump(led, f, indent=2)
+
+
+def get_ledger(limit: int = 200) -> list:
+    if db.enabled():
+        try:
+            return db.select("signal_ledger", order="fired_date.desc", limit=limit)
+        except Exception:
+            return []
+    return list(reversed(_ledger_file()))[:limit]

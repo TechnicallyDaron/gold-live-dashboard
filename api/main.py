@@ -415,6 +415,14 @@ def add_position(body: PositionBody, user: dict = Depends(get_current_user)):
     rec["type"] = rec.pop("contract_type").lower()
     pid = store.add_position(uid, rec)
     out = {"id": pid, "position": rec, "shield_armed": bool(body.entry_date)}
+    try:
+        _t, _n, _ = qc.resolve_ticker(rec["asset"])
+        ed = qc.get_next_earnings(_t)
+        if ed and ed <= rec["expiration"]:
+            out["earnings_warning"] = (f"\u26A0\uFE0F {rec['asset']} reports earnings {ed} — "
+                                       f"BEFORE your {rec['expiration']} expiration. IV-crush risk.")
+    except Exception:
+        pass
     if not uid:
         out["persistence_warning"] = PERSISTENCE_WARNING
     return out
@@ -423,6 +431,24 @@ def add_position(body: PositionBody, user: dict = Depends(get_current_user)):
 @app.get("/api/screener")
 def api_screener():
     return store.get_screener()
+
+
+@app.get("/api/ledger")
+def api_ledger():
+    """The machine's verified track record: every signal, every outcome."""
+    entries = store.get_ledger()
+    resolved = [e for e in entries if e.get("status") != "open"]
+    wins = [e for e in resolved if e.get("status") == "target_hit"]
+    return {"entries": entries,
+            "stats": {"total_fired": len(entries),
+                      "open": len(entries) - len(resolved),
+                      "resolved": len(resolved),
+                      "target_hit": len(wins),
+                      "stopped": len([e for e in resolved if e.get("status") == "stopped"]),
+                      "expired": len([e for e in resolved if e.get("status") == "expired"]),
+                      "hit_rate": round(len(wins) / len(resolved), 4) if resolved else None,
+                      "avg_result_pct": round(sum(e.get("result_pct") or 0 for e in resolved)
+                                              / len(resolved), 2) if resolved else None}}
 
 
 @app.get("/api/scan")
@@ -601,6 +627,15 @@ def _agent_pass():
         if not sent_media:
             tg_send(TELEGRAM_CHAT_ID, caption)
         notify("playbook", f"\U0001F3AF {h['asset']} setup live", body)
+        try:
+            b2 = qc.get_bias(h["ticker"])
+            store.save_signal({"fired_date": today, "asset": h["asset"],
+                "ticker": h["ticker"], "strategy": h["strategy"],
+                "strategy_name": h["strategy_name"], "side": h["side"],
+                "entry_ref": h.get("price") or b2.get("price"),
+                "stop_ref": b2.get("invalidation"), "target_ref": b2.get("target")})
+        except Exception:
+            pass
 
     # 2) Exhaustion: spent thrusts at extremes
     for name, d in qc.load_watchlist().items():
@@ -633,6 +668,78 @@ def _agent_pass():
                    f"The move in {name} is losing steam at ${st['price']:,.2f} after an "
                    f"extreme stretch \u2014 historically where thrusts stall. If you're "
                    f"in profit, consider locking some in.")
+
+    # 2b) LEDGER RESOLUTION: the machine grades its own signals.
+    #     Conservative rule: if a bar touches both stop and target, it
+    #     counts as STOPPED — ambiguity never flatters the record.
+    expiry_bars = int(os.getenv("LEDGER_EXPIRY_BARS", "15"))
+    for sig in store.get_open_signals():
+        try:
+            df = qc.fetch_history(sig["ticker"])
+            fired = datetime.strptime(str(sig["fired_date"])[:10], "%Y-%m-%d").date()
+            bars = df[[d.date() > fired for d in df.index]]
+            if not len(bars):
+                continue
+            stop, target = float(sig["stop_ref"] or 0), float(sig["target_ref"] or 0)
+            entry = float(sig["entry_ref"] or 0)
+            long_side = sig["side"] == "long"
+            hit_stop = (bars["Low"].min() <= stop) if long_side else (bars["High"].max() >= stop)
+            hit_tgt = (bars["High"].max() >= target) if long_side else (bars["Low"].min() <= target)
+            status, px = None, None
+            if hit_stop:                       # conservative: stop outranks target
+                status, px = "stopped", stop
+            elif hit_tgt:
+                status, px = "target_hit", target
+            elif len(bars) >= expiry_bars:
+                status, px = "expired", float(bars["Price"].iloc[-1])
+            if status and entry:
+                move = (px - entry) / entry * 100
+                result = round(move if long_side else -move, 2)
+                store.resolve_signal(sig["id"], status, today, round(px, 2), result)
+        except Exception:
+            continue
+
+    # 2c) PROFIT PEAK WATCH: an open position's underlying reaching the
+    #     reversion target in the profitable direction = statistically
+    #     maximum-profit territory. Not the literal top — nobody knows
+    #     the top. The destination, per the math that took the trade.
+    for pid, p in qc.load_positions().items():
+        try:
+            ticker, pname, _ = qc.resolve_ticker(p.get("asset", ""))
+            b = qc.get_bias(ticker)
+            is_put = str(p.get("type", "")).lower() == "put"
+            at_peak = (b["price"] <= b["target"]) if is_put else (b["price"] >= b["target"])
+            if at_peak and not store.cooldown_active(f"pk:{pid}"):
+                store.cooldown_set(f"pk:{pid}", 72)
+                body = (f"{pname} just reached ${b['price']:,.2f} — the statistical "
+                        f"target for your ${p.get('strike')} {p.get('type')}. This is "
+                        f"maximum-profit territory by the math that took the trade: "
+                        f"beyond here the edge is spent and theta works against you. "
+                        f"Locking in profit here is the textbook move.")
+                tg_send(TELEGRAM_CHAT_ID, f"\U0001F3C1 <b>PEAK ZONE — {pname}</b>\n\n{body}")
+                notify("peak", f"\U0001F3C1 {pname} at target", body)
+        except Exception:
+            continue
+
+    # 2d) EARNINGS SHIELD: report date landing before expiration = IV-crush
+    #     risk on a directionally CORRECT trade. Warn at 3 days out.
+    for pid, p in qc.load_positions().items():
+        try:
+            ticker, pname, _ = qc.resolve_ticker(p.get("asset", ""))
+            ed = qc.get_next_earnings(ticker)
+            if not (ed and p.get("expiration") and ed <= p["expiration"]):
+                continue
+            days = (datetime.strptime(ed, "%Y-%m-%d").date() - date.today()).days
+            if 0 <= days <= 3 and not store.cooldown_active(f"earn:{pid}"):
+                store.cooldown_set(f"earn:{pid}", 48)
+                body = (f"{pname} reports earnings {ed} — {days} day{'s' if days != 1 else ''} "
+                        f"away and BEFORE your {p['expiration']} expiration. Earnings can "
+                        f"crush option prices even when the stock moves your way. Decide "
+                        f"before the report, not after.")
+                tg_send(TELEGRAM_CHAT_ID, f"\u26A0\uFE0F <b>EARNINGS AHEAD — {pname}</b>\n\n{body}")
+                notify("earnings", f"\u26A0\uFE0F {pname} earnings {ed}", body)
+        except Exception:
+            continue
 
     # 3) DAY-MOVE RADAR: situational awareness, explicitly NOT a signal.
     #    Any watchlist name moving hard on the day gets ONE ping. The copy
@@ -792,6 +899,38 @@ async def _run_lab_book(chat_id=None):
             tg_send(chat_id, "\u274C Lab run failed \u2014 feed may be flaky. Try again.")
 
 
+def _fmt_report_card() -> str:
+    from datetime import timedelta
+    week_ago = (date.today() - timedelta(days=7)).isoformat()
+    led = store.get_ledger()
+    fired = [e for e in led if str(e.get("fired_date", "")) >= week_ago]
+    resolved = [e for e in led if str(e.get("resolved_date") or "") >= week_ago]
+    wins = [e for e in resolved if e.get("status") == "target_hit"]
+    j = store.get_journal(store.resolve_user(None))
+    closed = [e for e in j if str(e.get("exit_date") or "") >= week_ago]
+    lines = ["\U0001F4CB <b>Weekly Report Card</b>", ""]
+    lines.append(f"\U0001F4E1 Signals fired: {len(fired)}")
+    if resolved:
+        lines.append(f"\U0001F3AF Resolved: {len(resolved)} — {len(wins)} hit target, "
+                     f"{len([e for e in resolved if e.get('status') == 'stopped'])} stopped")
+    if closed:
+        pnls = [e["pnl_pct"] for e in closed if e.get("pnl_pct") is not None]
+        rc = [e for e in closed if e.get("rule_compliant")]
+        lines.append(f"\U0001F4D2 Your trades closed: {len(closed)}"
+                     + (f", avg {sum(pnls)/len(pnls):+.1f}%" if pnls else "")
+                     + f" — discipline {len(rc)}/{len(closed)} rule-compliant")
+    else:
+        lines.append("\U0001F4D2 No trades closed this week.")
+    if not fired and not closed:
+        lines.append("")
+        lines.append("A quiet week. The playbook doesn't force trades — "
+                     "it waits for its pitch. So do you.")
+    lines.append("")
+    lines.append("\U0001F9EA Tonight's auto-lab already ran — any new assignments "
+                 "were reported above. New week starts armed.")
+    return "\n".join(lines)
+
+
 async def _clock_loop():
     """NY-anchored scheduler: Digest 09:30 ET, Screener 16:15 ET, weekdays."""
     while True:
@@ -808,6 +947,13 @@ async def _clock_loop():
                 if 1615 <= hhmm < 1645 and not store.cooldown_active(skey):
                     store.cooldown_set(skey, 20)
                     await _run_daily_screener()
+            # Sunday 19:00 ET: the Weekly Report Card
+            if now.weekday() == 6:
+                rkey = f"report:{now.date().isoformat()}"
+                if 1900 <= now.hour * 100 + now.minute < 1930 and not store.cooldown_active(rkey):
+                    store.cooldown_set(rkey, 20)
+                    if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
+                        tg_send(TELEGRAM_CHAT_ID, _fmt_report_card())
             # Sunday 18:00 ET: expand the validated book while markets sleep
             if now.weekday() == 6 and os.getenv("AGENT", "on") != "off":
                 lkey = f"labbook:{now.date().isoformat()}"
@@ -836,6 +982,7 @@ def tg_set_my_commands():
         {"command": "valid", "description": "Grade a trade idea (e.g. /valid sofi 16.5 short)"},
         {"command": "positions", "description": "Trades the Guardian is watching"},
         {"command": "journal", "description": "Your trade history + win rate"},
+        {"command": "ledger", "description": "The system's own signal track record"},
         {"command": "macro", "description": "Big economic events this week"},
         {"command": "ask", "description": "Ask anything about an asset"},
         {"command": "help", "description": "What everything does, in plain English"},
@@ -1085,6 +1232,26 @@ def route_command(text: str) -> str:
             px = f" at ${h['price']:,.2f}" if h.get("price") else ""
             lines.append(f"\U0001F3AF <b>{h['asset']}</b>{px} \u2014 your validated "
                          f"<b>{h['strategy_name']}</b> is firing a {verb} ({h['side'].upper()}) setup.")
+        return "\n".join(lines)
+
+    if cmd == "/ledger":
+        entries = store.get_ledger(limit=50)
+        if not entries:
+            return ("\U0001F4D2 <b>Signal Ledger is empty.</b> Every playbook signal "
+                    "from here on gets logged and graded automatically — wins AND "
+                    "losses. The track record builds itself.")
+        resolved = [e for e in entries if e.get("status") != "open"]
+        wins = len([e for e in resolved if e.get("status") == "target_hit"])
+        lines = [f"\U0001F4D2 <b>Signal Ledger</b> — {len(entries)} fired, "
+                 f"{len(resolved)} resolved"
+                 + (f", hit rate {wins/len(resolved)*100:.0f}%" if resolved else "")]
+        icons = {"open": "\u23F3", "target_hit": "\u2705", "stopped": "\u274C",
+                 "expired": "\u23F0"}
+        for e in entries[:8]:
+            res = (f" → {e['result_pct']:+.1f}%" if e.get("result_pct") is not None else "")
+            lines.append(f"{icons.get(e.get('status'), '\u2022')} {e['asset']} "
+                         f"{str(e.get('side','')).upper()} {e.get('fired_date','')}"
+                         f"{res}")
         return "\n".join(lines)
 
     if cmd == "/labbook":

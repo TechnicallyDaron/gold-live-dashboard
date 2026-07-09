@@ -129,6 +129,34 @@ def get_option_premium(ticker: str, expiration: str, strike: float, opt_type: st
         return None
 
 
+def _download_next_earnings(ticker: str):
+    from datetime import date as _d
+    t = yf.Ticker(ticker)
+    try:
+        ed = t.earnings_dates
+        upcoming = [d for d in ed.index if d.date() >= _d.today()]
+        if upcoming:
+            return min(upcoming).date().isoformat()
+    except Exception:
+        pass
+    try:
+        cal = t.calendar
+        dates = cal.get("Earnings Date") if isinstance(cal, dict) else None
+        if dates:
+            return min(dates).isoformat()
+    except Exception:
+        pass
+    return None
+
+
+def get_next_earnings(ticker: str):
+    """Next earnings date as ISO string, or None. Cached 12h; never raises."""
+    try:
+        return _cached(f"earn:{ticker}", 43200, lambda: _download_next_earnings(ticker))
+    except Exception:
+        return None
+
+
 # ── Public engine surface ────────────────────────────────────
 def get_quote(ticker: str):
     """{price, change, pct} or None. Never fabricates $0.00."""
