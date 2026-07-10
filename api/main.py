@@ -617,13 +617,24 @@ def _agent_pass():
         body = (f"{h['asset']}{px}: your validated {h['strategy_name']} strategy "
                 f"just fired a {verb} setup. This is the exact pattern that made "
                 f"money in walk-forward testing \u2014 check the app for levels.")
+        lv = None
+        try:
+            lv = analytics.signal_levels(h["ticker"], h["strategy"], h["side"])
+            body += (f"\n\nSignal ${lv['entry']:,.2f} \u00b7 hard stop ${lv['stop']:,.2f}"
+                     + (f" \u00b7 {lv['guide_label'].split(' (')[0].lower()} "
+                        f"${lv['guide']:,.2f}" if lv.get("guide") else ""))
+        except Exception:
+            pass
         caption = f"\U0001F3AF <b>PLAYBOOK SETUP LIVE</b>\n\n{body}"
         sent_media = False
         try:
-            b = qc.get_bias(h["ticker"])
             png = analytics.render_chart_card(
                 h["ticker"], f"{h['asset']} \u2014 {h['strategy_name']} ({h['side'].upper()})",
-                entry=b.get("arm_level"), stop=b.get("invalidation"), target=b.get("target"))
+                entry=lv["entry"] if lv else None,
+                stop=lv["stop"] if lv else None,
+                target=lv["guide"] if lv else None,
+                labels={"entry": "SIGNAL", "stop": "HARD STOP",
+                        "target": (lv.get("guide_label") or "GUIDE") if lv else "GUIDE"})
             sent_media = tg_send_photo(TELEGRAM_CHAT_ID, png, caption)
         except Exception:
             pass
@@ -631,12 +642,12 @@ def _agent_pass():
             tg_send(TELEGRAM_CHAT_ID, caption)
         notify("playbook", f"\U0001F3AF {h['asset']} setup live", body)
         try:
-            b2 = qc.get_bias(h["ticker"])
             store.save_signal({"fired_date": today, "asset": h["asset"],
                 "ticker": h["ticker"], "strategy": h["strategy"],
                 "strategy_name": h["strategy_name"], "side": h["side"],
-                "entry_ref": h.get("price") or b2.get("price"),
-                "stop_ref": b2.get("invalidation"), "target_ref": b2.get("target")})
+                "entry_ref": (lv or {}).get("entry") or h.get("price"),
+                "stop_ref": (lv or {}).get("stop"),
+                "target_ref": (lv or {}).get("ledger_target")})
         except Exception:
             pass
 
@@ -683,11 +694,17 @@ def _agent_pass():
             bars = df[[d.date() > fired for d in df.index]]
             if not len(bars):
                 continue
-            stop, target = float(sig["stop_ref"] or 0), float(sig["target_ref"] or 0)
+            stop = float(sig["stop_ref"] or 0)
+            target = float(sig["target_ref"] or 0)
             entry = float(sig["entry_ref"] or 0)
             long_side = sig["side"] == "long"
+            # Guard: a target on the WRONG side of entry (legacy bias-level
+            # rows, or condition-exit families with no price target) is
+            # ignored — those signals grade on stop vs. expiry only.
+            target_valid = bool(target) and ((target > entry) if long_side else (target < entry))
             hit_stop = (bars["Low"].min() <= stop) if long_side else (bars["High"].max() >= stop)
-            hit_tgt = (bars["High"].max() >= target) if long_side else (bars["Low"].min() <= target)
+            hit_tgt = target_valid and ((bars["High"].max() >= target) if long_side
+                                        else (bars["Low"].min() <= target))
             status, px = None, None
             if hit_stop:                       # conservative: stop outranks target
                 status, px = "stopped", stop

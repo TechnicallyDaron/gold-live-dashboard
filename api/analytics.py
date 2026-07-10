@@ -644,7 +644,7 @@ CHART_TOKENS = {"bg": "#0B0E14", "panel": "#10141F", "grid": "#1E2635",
 
 def render_chart_card(ticker: str, title: str, entry: float | None = None,
                       stop: float | None = None, target: float | None = None,
-                      bars: int = 30) -> bytes:
+                      bars: int = 30, labels: dict | None = None) -> bytes:
     """PNG bytes: last-N candles on charcoal with entry/stop/target lines."""
     import matplotlib
     matplotlib.use("Agg")
@@ -663,9 +663,10 @@ def render_chart_card(ticker: str, title: str, entry: float | None = None,
         lo, hi = sorted([r["Open"], r["Price"]])
         ax.add_patch(plt.Rectangle((i - .32, lo), .64, max(hi - lo, 1e-9),
                                    facecolor=c, edgecolor=c, linewidth=.5))
-    for level, key, label in ((entry, "entry", "ENTRY ZONE"),
-                              (stop, "stop", "INVALIDATION"),
-                              (target, "target", "TAKE PROFIT")):
+    L = labels or {}
+    for level, key, label in ((entry, "entry", L.get("entry", "ENTRY ZONE")),
+                              (stop, "stop", L.get("stop", "INVALIDATION")),
+                              (target, "target", L.get("target", "TAKE PROFIT"))):
         if level:
             ax.axhline(level, color=T[key], linewidth=1.6,
                        linestyle="-" if key != "entry" else "--")
@@ -959,3 +960,33 @@ def universe_lab(progress=None, budget_s: float | None = None, chunk: int = 25) 
                 pass
     return {"new_pairs": new_pairs, "scanned": scanned, "total": total,
             "errors": errors, "ran_out_of_time": ran_out}
+
+
+# ── 14) STRATEGY-TRUE SIGNAL LEVELS ──────────────────────────
+#     A signal's levels must come from ITS OWN rules, not the bias
+#     module's band structure. Entry = the close that fired. Stop = the
+#     engine's actual hard stop (what the backtest used). Guide = the
+#     20 EMA, labeled for what it means to THIS family: a mean target
+#     for reversion styles, a trailing exit for trend styles.
+REVERSION_FAMILIES = {"meanrev", "rsi", "pullback", "rsi2", "gapfade"}
+
+
+def signal_levels(ticker: str, family: str, side: str) -> dict:
+    df = qc.fetch_history(ticker)
+    close = float(df["Price"].iloc[-1])
+    base = float(df["Baseline"].iloc[-1])
+    slp = qc.STOP_LOSS_PCT
+    long_side = side == "long"
+    stop = close * (1 - slp) if long_side else close * (1 + slp)
+    profitable_side = (base > close) if long_side else (base < close)
+    if family in REVERSION_FAMILIES:
+        guide = base if profitable_side else None
+        guide_label = "MEAN TARGET (20 EMA)" if guide else None
+        ledger_target = guide
+    else:
+        guide, guide_label = base, "TREND EXIT (20 EMA)"
+        ledger_target = base if profitable_side else None
+    return {"entry": round(close, 2), "stop": round(stop, 2),
+            "guide": round(guide, 2) if guide else None,
+            "guide_label": guide_label,
+            "ledger_target": round(ledger_target, 2) if ledger_target else None}
