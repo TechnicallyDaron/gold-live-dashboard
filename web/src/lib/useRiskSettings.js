@@ -7,9 +7,14 @@ const DEFAULTS = { accountSize: 0, maxPct: 25 }
 
 function load() {
   try {
+    if (typeof window === 'undefined' || !window.localStorage) return DEFAULTS
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return DEFAULTS
     const parsed = JSON.parse(raw)
+    // Guard against corrupted storage holding a non-object JSON value
+    // (e.g. a stray "null" or "42") — parsed.accountSize would otherwise
+    // throw on a primitive.
+    if (!parsed || typeof parsed !== 'object') return DEFAULTS
     return {
       accountSize: Number(parsed.accountSize) || 0,
       maxPct: Number(parsed.maxPct) || DEFAULTS.maxPct,
