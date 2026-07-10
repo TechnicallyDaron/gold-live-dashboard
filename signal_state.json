@@ -1,127 +1,127 @@
 {
   "Gold": {
     "state": "\u26aa NO TRADE",
-    "price": 4132.6,
-    "checked_at": "2026-07-09T22:06:37Z"
+    "price": 4110.6,
+    "checked_at": "2026-07-10T15:39:05Z"
   },
   "S&P 500": {
     "state": "\u26aa NO TRADE",
-    "price": 7543.64,
-    "checked_at": "2026-07-09T22:06:37Z"
+    "price": 7553.99,
+    "checked_at": "2026-07-10T15:39:05Z"
   },
   "SOFI": {
-    "state": "\u26aa NO TRADE",
-    "price": 18.62,
-    "checked_at": "2026-07-09T22:06:37Z"
+    "state": "\ud83d\udfe1 SHORT WATCH",
+    "price": 18.78,
+    "checked_at": "2026-07-10T15:39:05Z"
   },
   "SPY": {
     "state": "\u26aa NO TRADE",
-    "price": 751.71,
-    "checked_at": "2026-07-09T22:06:37Z"
+    "price": 752.76,
+    "checked_at": "2026-07-10T15:39:05Z"
   },
   "QQQ": {
     "state": "\u26aa NO TRADE",
-    "price": 723.28,
-    "checked_at": "2026-07-09T22:06:37Z"
+    "price": 722.98,
+    "checked_at": "2026-07-10T15:39:05Z"
   },
   "IWM": {
     "state": "\u26aa NO TRADE",
-    "price": 297.24,
-    "checked_at": "2026-07-09T22:06:37Z"
+    "price": 294.99,
+    "checked_at": "2026-07-10T15:39:05Z"
   },
   "DIA": {
     "state": "\u26aa NO TRADE",
-    "price": 524.19,
-    "checked_at": "2026-07-09T22:06:37Z"
+    "price": 525.44,
+    "checked_at": "2026-07-10T15:39:05Z"
   },
   "GLD": {
     "state": "\u26aa NO TRADE",
-    "price": 378.18,
-    "checked_at": "2026-07-09T22:06:37Z"
+    "price": 376.61,
+    "checked_at": "2026-07-10T15:39:05Z"
   },
   "TLT": {
     "state": "\u26aa NO TRADE",
-    "price": 84.49,
-    "checked_at": "2026-07-09T22:06:37Z"
+    "price": 84.6,
+    "checked_at": "2026-07-10T15:39:05Z"
   },
   "USO": {
     "state": "\u26aa NO TRADE",
-    "price": 109.01,
-    "checked_at": "2026-07-09T22:06:37Z"
+    "price": 108.09,
+    "checked_at": "2026-07-10T15:39:05Z"
   },
   "NVDA": {
     "state": "\u26aa NO TRADE",
-    "price": 202.78,
-    "checked_at": "2026-07-09T22:06:37Z"
+    "price": 209.1,
+    "checked_at": "2026-07-10T15:39:05Z"
   },
   "TSLA": {
     "state": "\u26aa NO TRADE",
-    "price": 406.55,
-    "checked_at": "2026-07-09T22:06:37Z"
+    "price": 409.19,
+    "checked_at": "2026-07-10T15:39:05Z"
   },
   "AMD": {
     "state": "\u26aa NO TRADE",
-    "price": 546.72,
-    "checked_at": "2026-07-09T22:06:37Z"
+    "price": 550.17,
+    "checked_at": "2026-07-10T15:39:05Z"
   },
   "AAPL": {
     "state": "\u26aa NO TRADE",
-    "price": 316.22,
-    "checked_at": "2026-07-09T22:06:37Z"
+    "price": 313.45,
+    "checked_at": "2026-07-10T15:39:05Z"
   },
   "AMZN": {
     "state": "\u26aa NO TRADE",
-    "price": 247.04,
-    "checked_at": "2026-07-09T22:06:37Z"
+    "price": 246.26,
+    "checked_at": "2026-07-10T15:39:05Z"
   },
   "META": {
     "state": "\u26aa NO TRADE",
-    "price": 631.48,
-    "checked_at": "2026-07-09T22:06:37Z"
+    "price": 671.66,
+    "checked_at": "2026-07-10T15:39:05Z"
   },
   "MSFT": {
     "state": "\u26aa NO TRADE",
     "price": 384.36,
-    "checked_at": "2026-07-09T22:06:37Z"
+    "checked_at": "2026-07-10T15:39:05Z"
   },
   "NFLX": {
     "state": "\u26aa NO TRADE",
-    "price": 75.47,
-    "checked_at": "2026-07-09T22:06:37Z"
+    "price": 73.04,
+    "checked_at": "2026-07-10T15:39:05Z"
   },
   "GOOG": {
     "state": "\u26aa NO TRADE",
-    "price": 356.24,
-    "checked_at": "2026-07-09T22:06:37Z"
+    "price": 351.94,
+    "checked_at": "2026-07-10T15:39:05Z"
   },
   "DIS": {
     "state": "\u26aa NO TRADE",
-    "price": 96.17,
-    "checked_at": "2026-07-09T22:06:37Z"
+    "price": 96.02,
+    "checked_at": "2026-07-10T15:39:05Z"
   },
   "JPM": {
     "state": "\u26aa NO TRADE",
-    "price": 335.47,
-    "checked_at": "2026-07-09T22:06:37Z"
+    "price": 336.61,
+    "checked_at": "2026-07-10T15:39:05Z"
   },
   "V": {
     "state": "\u26aa NO TRADE",
-    "price": 348.2,
-    "checked_at": "2026-07-09T22:06:37Z"
+    "price": 346.45,
+    "checked_at": "2026-07-10T15:39:05Z"
   },
   "BABA": {
     "state": "\u26aa NO TRADE",
-    "price": 111.14,
-    "checked_at": "2026-07-09T22:06:37Z"
+    "price": 112.79,
+    "checked_at": "2026-07-10T15:39:05Z"
   },
   "COIN": {
     "state": "\u26aa NO TRADE",
-    "price": 158.44,
-    "checked_at": "2026-07-09T22:06:37Z"
+    "price": 159.49,
+    "checked_at": "2026-07-10T15:39:05Z"
   },
   "_meta": {
-    "last_digest": "2026-07-09",
-    "last_pulse": "2026-07-09T20:27:33+00:00",
+    "last_digest": "2026-07-10",
+    "last_pulse": "2026-07-10T15:39:05+00:00",
     "pulse_ref": {
       "Gold": {
         "z": -0.30871466923981994,
@@ -160,8 +160,8 @@
         "price": 314.1700134277344
       },
       "NVDA": {
-        "z": -0.026847552997304024,
-        "price": 201.64999389648438
+        "z": 1.0946475387435017,
+        "price": 209.10499572753906
       },
       "MSFT": {
         "z": -0.3452698573062294,
@@ -172,12 +172,12 @@
         "price": 247.0399932861328
       },
       "META": {
-        "z": 1.6879433194490452,
-        "price": 631.47998046875
+        "z": 2.318796304200023,
+        "price": 671.659912109375
       },
       "TSLA": {
-        "z": 0.0814006529938468,
-        "price": 404.3599853515625
+        "z": 0.3645341720393546,
+        "price": 409.19000244140625
       },
       "AMD": {
         "z": 0.8810000018665327,
@@ -192,24 +192,24 @@
         "price": 524.739990234375
       },
       "USO": {
-        "z": -0.4525831722987666,
-        "price": 109.48999786376953
+        "z": -0.6768507679993451,
+        "price": 108.08999633789062
       },
       "NFLX": {
-        "z": -0.5399011089772245,
-        "price": 74.79499816894531
+        "z": -1.0404718581473151,
+        "price": 73.04000091552734
       },
       "GOOG": {
-        "z": -0.17880767940895761,
-        "price": 356.239990234375
+        "z": -0.5810804967828231,
+        "price": 351.94000244140625
       },
       "DIS": {
         "z": -1.218677496093622,
         "price": 95.82499694824219
       },
       "JPM": {
-        "z": 0.693541749154158,
-        "price": 332.8900146484375
+        "z": 1.2131589920855952,
+        "price": 336.6099853515625
       },
       "V": {
         "z": 0.5715403215481105,
