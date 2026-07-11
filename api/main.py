@@ -708,11 +708,15 @@ def _agent_pass():
             target = float(sig["target_ref"] or 0)
             entry = float(sig["entry_ref"] or 0)
             long_side = sig["side"] == "long"
-            # Guard: a target on the WRONG side of entry (legacy bias-level
-            # rows, or condition-exit families with no price target) is
-            # ignored — those signals grade on stop vs. expiry only.
+            # Guard: refs on the WRONG side of entry (legacy bias-level rows,
+            # or condition-exit families with no price target) are ignored.
+            # A long's stop must sit BELOW entry and its target ABOVE — any
+            # ref violating that can never grade a signal. Signals with no
+            # valid refs grade on expiry alone: honest mark-to-close.
             target_valid = bool(target) and ((target > entry) if long_side else (target < entry))
-            hit_stop = (bars["Low"].min() <= stop) if long_side else (bars["High"].max() >= stop)
+            stop_valid = bool(stop) and ((stop < entry) if long_side else (stop > entry))
+            hit_stop = stop_valid and ((bars["Low"].min() <= stop) if long_side
+                                       else (bars["High"].max() >= stop))
             hit_tgt = target_valid and ((bars["High"].max() >= target) if long_side
                                         else (bars["Low"].min() <= target))
             status, px = None, None
