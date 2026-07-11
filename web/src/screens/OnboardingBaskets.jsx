@@ -69,7 +69,9 @@ export default function OnboardingBaskets({ userId, onDone, onSkip }) {
     let failures = 0
     for (const ticker of allTickers) {
       try {
-        const res = await api.addWatchlist({ name: ticker, ticker, unit: '/sh' })
+        // name/unit omitted — the backend resolves the company name from
+        // the ticker and defaults the unit.
+        const res = await api.addWatchlist({ ticker })
         lastWatchlist = res.watchlist
       } catch (err) {
         if (err.status !== 409) {

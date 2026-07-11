@@ -5,23 +5,28 @@ import BottomSheet from './BottomSheet.jsx'
 import './FormField.css'
 
 export default function WatchlistAddForm({ onClose, onSaved }) {
-  const [name, setName] = useState('')
   const [ticker, setTicker] = useState('')
-  const [unit, setUnit] = useState('/sh')
   const [error, setError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
+  const [addedName, setAddedName] = useState(null)
 
-  const canSubmit = name.trim() && ticker.trim() && !submitting
+  const canSubmit = ticker.trim() && !submitting
 
   const submit = async () => {
     setError(null)
     setSubmitting(true)
     try {
-      const res = await api.addWatchlist({ name: name.trim(), ticker: ticker.trim(), unit })
-      showToast(`✅ ${name.trim()} added to your watchlist`, 'success')
-      if (res.persistence_warning) showToast(res.persistence_warning, 'warning')
+      const tickerUpper = ticker.trim().toUpperCase()
+      const res = await api.addWatchlist({ ticker: tickerUpper })
+      // The backend resolves the company name server-side — find the entry
+      // it just created by matching the ticker back against the returned
+      // watchlist rather than assuming any particular key.
+      const resolvedName =
+        Object.keys(res.watchlist).find((n) => res.watchlist[n].ticker === tickerUpper) || tickerUpper
       onSaved?.(res.watchlist)
-      onClose()
+      showToast(`✅ ${resolvedName} added to your watchlist`, 'success')
+      if (res.persistence_warning) showToast(res.persistence_warning, 'warning')
+      setAddedName(resolvedName)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -30,37 +35,35 @@ export default function WatchlistAddForm({ onClose, onSaved }) {
   }
 
   return (
-    <BottomSheet title="Add to Watchlist" onClose={onClose} heightVh={52}>
-      <div className="field">
-        <span className="field-label">Display Name</span>
-        <input
-          className="field-input" placeholder="e.g. Palantir"
-          value={name} onChange={(e) => setName(e.target.value)}
-        />
-      </div>
-      <div className="field-row">
-        <div className="field">
-          <span className="field-label">Ticker</span>
-          <input
-            className="field-input" placeholder="e.g. PLTR" style={{ textTransform: 'uppercase' }}
-            value={ticker} onChange={(e) => setTicker(e.target.value)}
-          />
+    <BottomSheet title="Add to Watchlist" onClose={onClose} heightVh={addedName ? 38 : 42}>
+      {addedName ? (
+        <div className="field-success">
+          <span className="field-success-icon">✓</span>
+          <p className="field-success-text">
+            <strong>{addedName}</strong> added to your watchlist.
+          </p>
+          <button type="button" className="field-submit" onClick={onClose}>
+            Done
+          </button>
         </div>
-        <div className="field">
-          <span className="field-label">Unit</span>
-          <select className="field-select" value={unit} onChange={(e) => setUnit(e.target.value)}>
-            <option value="/sh">/sh</option>
-            <option value="/oz">/oz</option>
-            <option value="">(none)</option>
-          </select>
-        </div>
-      </div>
+      ) : (
+        <>
+          <div className="field">
+            <span className="field-label">Ticker</span>
+            <input
+              className="field-input" placeholder="e.g. PLTR" style={{ textTransform: 'uppercase' }}
+              value={ticker} onChange={(e) => setTicker(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && submit()}
+            />
+          </div>
 
-      {error && <p className="field-error">{error}</p>}
+          {error && <p className="field-error">{error}</p>}
 
-      <button type="button" className="field-submit" disabled={!canSubmit} onClick={submit}>
-        {submitting ? 'Adding…' : 'Add Asset'}
-      </button>
+          <button type="button" className="field-submit" disabled={!canSubmit} onClick={submit}>
+            {submitting ? 'Adding…' : 'Add Asset'}
+          </button>
+        </>
+      )}
     </BottomSheet>
   )
 }
