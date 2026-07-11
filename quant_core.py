@@ -185,7 +185,8 @@ def get_quote(ticker: str):
 
 
 def fetch_history(ticker: str) -> pd.DataFrame:
-    return _cached(f"h:{ticker}", 60, lambda: add_indicators(_download_history(ticker)))
+    ttl = int(os.getenv("HIST_TTL_S", "300"))
+    return _cached(f"h:{ticker}", ttl, lambda: add_indicators(_download_history(ticker)))
 
 
 def get_bias(ticker: str) -> dict:

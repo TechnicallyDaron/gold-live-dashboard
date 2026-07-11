@@ -30,12 +30,24 @@ def _get(path: str, params: dict | None = None) -> dict:
     if params:
         p.update(params)
     r = requests.get(f"{BASE}{path}", params=p, timeout=15)
+    if r.status_code == 429:              # rate-limited: one polite retry
+        time.sleep(1.5)
+        r = requests.get(f"{BASE}{path}", params=p, timeout=15)
     r.raise_for_status()
     return r.json()
 
 
 def _dividends(ticker: str, start: str) -> list:
-    """[(ex_date_ts, cash_amount)] since start. Empty on any failure."""
+    """[(ex_date_ts, cash_amount)] since start, cached 12h. Empty on failure."""
+    try:
+        import quant_core as qc
+        return qc._cached(f"pgdiv:{ticker}", 43200,
+                          lambda: _dividends_fetch(ticker, start))
+    except Exception:
+        return []
+
+
+def _dividends_fetch(ticker: str, start: str) -> list:
     try:
         j = _get("/v3/reference/dividends",
                  {"ticker": ticker.upper(), "ex_dividend_date.gte": start,
@@ -103,17 +115,18 @@ def polygon_quote(ticker: str):
     """Drop-in for qc._download_quote → (price, change, pct).
     Snapshot first (15-min delayed on Starter); falls back to the last
     two daily bars if the snapshot endpoint is unavailable."""
-    try:
-        j = _get(f"/v2/snapshot/locale/us/markets/stocks/tickers/{ticker.upper()}")
-        t = j.get("ticker") or {}
-        price = (t.get("lastTrade") or {}).get("p") or (t.get("day") or {}).get("c")
-        prev = (t.get("prevDay") or {}).get("c")
-        if price and prev:
-            price, prev = float(price), float(prev)
-            return price, price - prev, (price - prev) / prev * 100
-    except Exception:
-        pass
-    df = _aggs(ticker, 40)
+    if os.getenv("POLYGON_SNAPSHOT", "off").lower() == "on":
+        try:
+            j = _get(f"/v2/snapshot/locale/us/markets/stocks/tickers/{ticker.upper()}")
+            t = j.get("ticker") or {}
+            price = (t.get("lastTrade") or {}).get("p") or (t.get("day") or {}).get("c")
+            prev = (t.get("prevDay") or {}).get("c")
+            if price and prev:
+                price, prev = float(price), float(prev)
+                return price, price - prev, (price - prev) / prev * 100
+        except Exception:
+            pass
+    df = _aggs(ticker, 7)
     closes = df["Price"].dropna()
     if len(closes) >= 2:
         c, p = float(closes.iloc[-1]), float(closes.iloc[-2])
