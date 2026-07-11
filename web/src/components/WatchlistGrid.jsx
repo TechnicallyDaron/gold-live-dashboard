@@ -84,7 +84,7 @@ export default function WatchlistGrid({
   watchlist, names, byAsset, loading, flashKeys,
   screenerTickers = EMPTY_SET, signalsPerWeekByKey = EMPTY_MAP,
   pinnedNames = EMPTY_ARRAY,
-  onLongPress, onAddClick, onEditPins,
+  onLongPress, onAddClick, onEditPins, onDeleteQuiet,
 }) {
   const navigate = useNavigate()
   const scrollRef = useRef(null)
@@ -220,20 +220,29 @@ export default function WatchlistGrid({
               {quietNames.map((name) => {
                 const quote = byAsset?.[name]?.quote
                 return (
-                  <button
-                    key={name}
-                    type="button"
-                    className="wg-quiet-item"
-                    onClick={() => navigate(`/bias/${encodeURIComponent(name)}`)}
-                  >
-                    <span className="wg-quiet-item-name">{name}</span>
-                    {quote && (
-                      <span className="wg-quiet-item-price tabular-nums">
-                        ${quote.price?.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                        {watchlist[name].unit}
-                      </span>
-                    )}
-                  </button>
+                  <div key={name} className="wg-quiet-item">
+                    <button
+                      type="button"
+                      className="wg-quiet-item-main"
+                      onClick={() => navigate(`/bias/${encodeURIComponent(name)}`)}
+                    >
+                      <span className="wg-quiet-item-name">{name}</span>
+                      {quote && (
+                        <span className="wg-quiet-item-price tabular-nums">
+                          ${quote.price?.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                          {watchlist[name].unit}
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      className="wg-quiet-item-delete"
+                      aria-label={`Remove ${name}`}
+                      onClick={() => onDeleteQuiet?.(name)}
+                    >
+                      ✕
+                    </button>
+                  </div>
                 )
               })}
             </div>

@@ -10,7 +10,7 @@ import { useAuth } from '../lib/useAuth.js'
 import { matchAssetKey } from '../lib/matchAsset.js'
 import { api } from '../lib/api.js'
 import { showToast } from '../lib/toast.js'
-import { getPins, setPins as persistPins } from '../lib/pinnedAssets.js'
+import { getPins, setPins as persistPins, removePin } from '../lib/pinnedAssets.js'
 import HealthDot from '../components/HealthDot.jsx'
 import TickerTape from '../components/TickerTape.jsx'
 import MacroHijackBanner from '../components/MacroHijackBanner.jsx'
@@ -91,6 +91,10 @@ export default function Briefing() {
     try {
       const res = await api.removeWatchlist(name)
       setWatchlist(res.watchlist)
+      if (pins.includes(name)) {
+        removePin(user?.id, name)
+        setPinsState((prev) => prev.filter((n) => n !== name))
+      }
       showToast(`Removed ${name} from your watchlist`, 'success')
       if (res.persistence_warning) showToast(res.persistence_warning, 'warning')
     } catch (err) {
@@ -138,6 +142,7 @@ export default function Briefing() {
         signalsPerWeekByKey={signalsPerWeekByKey}
         pinnedNames={pins}
         onLongPress={setRemoveTarget}
+        onDeleteQuiet={setRemoveTarget}
         onAddClick={() => setShowAddForm(true)}
         onEditPins={() => setShowEditPins(true)}
       />
@@ -154,7 +159,7 @@ export default function Briefing() {
 
       {removeTarget && (
         <ConfirmDialog
-          title={`Remove ${removeTarget}?`}
+          title={`Remove ${removeTarget} from your watchlist?`}
           body="You can add it back any time from the + tile."
           confirmLabel="Remove"
           onConfirm={confirmRemove}

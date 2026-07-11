@@ -114,11 +114,20 @@
 .wg-quiet-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   width: 100%;
-  padding: 10px 14px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
+  background: transparent;
+}
+
+.wg-quiet-item-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1;
+  min-width: 0;
+  padding: 10px 14px;
   background: transparent;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -128,9 +137,36 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .wg-quiet-item-price {
   font-size: 13px;
   color: var(--muted);
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.wg-quiet-item-delete {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  margin-right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.wg-quiet-item-delete:active {
+  border-color: var(--short);
+  color: var(--short);
 }
