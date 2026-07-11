@@ -606,7 +606,8 @@ def scan_playbook() -> list:
     return hits
 
 
-import json  # (idempotent; used above)
+import json
+import sys  # (idempotent; used above)
 
 
 # ── 8) PLAIN-HONEST TRANSLATOR ───────────────────────────────
@@ -931,42 +932,48 @@ def universe_lab(progress=None, budget_s: float | None = None, chunk: int = 25) 
                 ran_out = True
                 break
             scanned += 1
-            df = hist.get(t)
-            if df is None:
-                errors += 1
-                _store.cooldown_set(f"ulab:{t}", 720)
-                continue
             try:
+                df = hist.get(t)
+                if df is None:
+                    raise ValueError("no bars")
                 df = qc.add_indicators(df)
-            except Exception:
-                errors += 1
-                _store.cooldown_set(f"ulab:{t}", 720)
-                continue
-            results = []
-            for fam in qc.STRATEGIES:
+                results = []
+                for fam in qc.STRATEGIES:
+                    try:
+                        results.append(walk_forward(t, fam, df=df))
+                    except Exception:
+                        continue
+                validated = [r for r in results if r["validated"]]
+                if validated:
+                    validated.sort(key=lambda r: r["test"]["expectancy_pct"], reverse=True)
+                    a = validated[0]
+                    today = _date.today().isoformat()
+                    _store.save_playbook_assignment(t, a["strategy"], a["name"],
+                                                    today, a["test"])
+                    try:
+                        try:
+                            with open("playbook.json") as f:
+                                fpb = json.load(f)
+                        except Exception:
+                            fpb = {"assignments": {}}
+                        fpb.setdefault("assignments", {})[t] = {
+                            "strategy": a["strategy"], "name": a["name"],
+                            "assigned_at": today}
+                        with open("playbook.json", "w") as f:
+                            json.dump(fpb, f, indent=2)
+                    except Exception:
+                        pass          # DB assignment is the truth; file is cache
+                    new_pairs.append({"ticker": t, "strategy": a["strategy"],
+                                      "strategy_name": a["name"], "test": a["test"]})
+                else:
+                    raise ValueError("nothing validated")
+            except Exception as e:
+                if str(e) != "nothing validated":
+                    errors += 1       # rejections aren't errors; feed/data issues are
                 try:
-                    results.append(walk_forward(t, fam, df=df))
+                    _store.cooldown_set(f"ulab:{t}", 720)
                 except Exception:
-                    continue
-            validated = [r for r in results if r["validated"]]
-            if validated:
-                validated.sort(key=lambda r: r["test"]["expectancy_pct"], reverse=True)
-                a = validated[0]
-                today = _date.today().isoformat()
-                _store.save_playbook_assignment(t, a["strategy"], a["name"], today, a["test"])
-                try:
-                    with open("playbook.json") as f:
-                        fpb = json.load(f)
-                except Exception:
-                    fpb = {"assignments": {}}
-                fpb.setdefault("assignments", {})[t] = {
-                    "strategy": a["strategy"], "name": a["name"], "assigned_at": today}
-                with open("playbook.json", "w") as f:
-                    json.dump(fpb, f, indent=2)
-                new_pairs.append({"ticker": t, "strategy": a["strategy"],
-                                  "strategy_name": a["name"], "test": a["test"]})
-            else:
-                _store.cooldown_set(f"ulab:{t}", 720)
+                    pass              # a cooldown blip must NEVER kill the run
         if progress and not ran_out:
             try:
                 progress(f"\U0001F52D {scanned}/{total} scanned \u2014 "

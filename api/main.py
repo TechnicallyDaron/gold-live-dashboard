@@ -969,9 +969,12 @@ async def _run_lab_book(chat_id=None):
             notify("playbook", f"\U0001F9EA {len(res['new_assignments'])} new "
                    f"playbook assignments",
                    ", ".join(r["asset"] for r in res["new_assignments"]))
-    except Exception:
-        if chat_id:
-            tg_send(chat_id, "\u274C Lab run failed \u2014 feed may be flaky. Try again.")
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        tg_send(chat_id or TELEGRAM_CHAT_ID,
+                f"\u274C Lab run crashed: {_esc(str(e)[:120])}\n"
+                f"Send /labbook to retry \u2014 finished assets are never re-labbed.")
 
 
 def _fmt_report_card() -> str:
@@ -1042,9 +1045,12 @@ async def _run_pool_book(chat_id=None):
             notify("playbook", f"\U0001F30C {len(res['new_assignments'])} universe "
                    f"famil{'ies' if len(res['new_assignments']) != 1 else 'y'} validated",
                    ", ".join(r["name"] for r in res["new_assignments"]))
-    except Exception:
-        if chat_id:
-            tg_send(chat_id, "\u274C Universe lab failed \u2014 feed may be flaky. Try again.")
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        tg_send(chat_id or TELEGRAM_CHAT_ID,
+                f"\u274C Pooled validation crashed: {_esc(str(e)[:120])}\n"
+                f"Send /unilab to retry.")
 
 
 def _fmt_universe_lab(res: dict) -> str:
@@ -1087,10 +1093,12 @@ async def _run_universe_lab(chat_id=None):
         if res["new_pairs"]:
             notify("playbook", f"\U0001F52D {len(res['new_pairs'])} new validated pairs",
                    ", ".join(r["ticker"] for r in res["new_pairs"][:15]))
-    except Exception:
-        if chat_id:
-            tg_send(chat_id, "\u274C Universe Lab failed \u2014 feed may be flaky. "
-                             "/ulab to retry; completed names are remembered.")
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        tg_send(chat_id or TELEGRAM_CHAT_ID,
+                f"\u274C Universe Lab crashed mid-run: {_esc(str(e)[:120])}\n"
+                f"Progress is saved \u2014 send /ulab to resume where it stopped.")
 
 
 async def _clock_loop():
