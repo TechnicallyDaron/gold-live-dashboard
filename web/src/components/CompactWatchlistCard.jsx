@@ -21,13 +21,25 @@ export default function CompactWatchlistCard({ name, unit, entry, loading, flash
   const pressTimer = useRef(null)
   const longPressFired = useRef(false)
 
-  if (loading) {
+  // No entry yet for THIS asset specifically — e.g. just added to the
+  // watchlist and the next poll cycle hasn't resolved it, or the batch
+  // fetch is still in flight. `loading` alone only covers the very first
+  // load (see WatchlistGrid); byAsset can be non-null while still missing
+  // an individual name, and rendering that as $undefined/0.00% instead of
+  // a skeleton is exactly the "empty card mid-sync" bug.
+  if (loading || !entry) {
     return <div className="skeleton compact-card-skeleton" />
   }
 
-  const feedDown = !!entry?.quoteError
-  const quote = entry?.quote
-  const bias = entry?.bias
+  const feedDown = !!entry.quoteError
+  const quote = entry.quote
+  const bias = entry.bias
+
+  // Fulfilled but empty (no error, no data either) — same treatment.
+  if (!feedDown && !quote) {
+    return <div className="skeleton compact-card-skeleton" />
+  }
+
   const chip = statusChip(bias)
   const pct = quote?.pct ?? 0
   const pctPositive = pct > 0
