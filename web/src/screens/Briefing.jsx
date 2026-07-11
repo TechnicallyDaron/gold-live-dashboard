@@ -4,6 +4,7 @@ import { useWatchlistData } from '../lib/useWatchlistData.js'
 import { useMacro } from '../lib/useMacro.js'
 import { useMacroRadar } from '../lib/useMacroRadar.js'
 import { useScreener } from '../lib/useScreener.js'
+import { useAssignments } from '../lib/useAssignments.js'
 import { useNotifications } from '../lib/useNotifications.js'
 import { matchAssetKey } from '../lib/matchAsset.js'
 import { api } from '../lib/api.js'
@@ -27,6 +28,7 @@ export default function Briefing() {
   const { data: macroEvents, loading: macroLoading } = useMacro()
   const { data: radar } = useMacroRadar()
   const { hits: screenerHits } = useScreener()
+  const { assignments } = useAssignments()
   const { items: notifications } = useNotifications()
   const [quickLook, setQuickLook] = useState(null)
   const [flashKeys, setFlashKeys] = useState(new Set())
@@ -39,6 +41,10 @@ export default function Briefing() {
   const screenerTickers = useMemo(
     () => new Set(screenerHits.map((h) => h.ticker.toUpperCase())),
     [screenerHits]
+  )
+  const signalsPerWeekByKey = useMemo(
+    () => new Map(assignments.map((a) => [a.key.toUpperCase(), a.signals_per_week ?? 0])),
+    [assignments]
   )
 
   const hijack = radar?.hijack && radar?.nearest
@@ -114,6 +120,7 @@ export default function Briefing() {
         loading={dataLoading}
         flashKeys={flashKeys}
         screenerTickers={screenerTickers}
+        signalsPerWeekByKey={signalsPerWeekByKey}
         onLongPress={setRemoveTarget}
         onAddClick={() => setShowAddForm(true)}
       />

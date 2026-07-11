@@ -75,6 +75,7 @@ export const api = {
   journal: () => request('/api/journal'),
   candidates: () => request('/api/candidates'),
   screener: () => request('/api/screener'),
+  playbook: () => request('/api/playbook'),
   strategyLab: (asset) => request(`/api/strategy-lab/${encodeURIComponent(asset)}`),
   optimizedEdge: (asset) => request(`/api/optimized-edge/${encodeURIComponent(asset)}`),
   me: () => request('/api/me'),

@@ -12,35 +12,51 @@ function chunk4(items) {
   return pages
 }
 
-// Tiers 1-4 are "active" — an asset qualifying for any of them always
-// belongs in the paginated grid, however many there are. Tiers 5-7 only
+// Below this, a playbook pair fires too rarely to earn a permanent grid
+// slot on its own — it's ranked (and promotable) alongside the unassigned
+// quiet assets instead.
+const FREQUENT_THRESHOLD = 0.25 // signals/week
+
+// Matches the backend's own assignment_for() lookup order: display name
+// first, then raw ticker, both uppercased.
+function signalsPerWeekFor(name, watchlist, signalsPerWeekByKey) {
+  const ticker = (watchlist[name]?.ticker || name).toUpperCase()
+  return signalsPerWeekByKey.get(name.toUpperCase()) ?? signalsPerWeekByKey.get(ticker) ?? 0
+}
+
+// Tiers 1-5 are "active" — an asset qualifying for any of them always
+// belongs in the paginated grid, however many there are. Tiers 6-8 only
 // matter for ranking which quiet assets get promoted to fill the grid up
 // to its 4-card minimum when there aren't enough active ones.
-function isActiveTier(name, watchlist, byAsset, screenerTickers) {
+function isActiveTier(name, watchlist, byAsset, screenerTickers, signalsPerWeekByKey) {
   const bias = byAsset?.[name]?.bias
   const ticker = (watchlist[name]?.ticker || name).toUpperCase()
   const firing = !!(bias?.assigned_strategy && bias?.signaling_today)
   const inScreener = screenerTickers.has(ticker)
   const setupLive = bias?.color === 'green' || bias?.color === 'red'
   const watch = bias?.color === 'orange'
-  return firing || inScreener || setupLive || watch
+  const frequent = signalsPerWeekFor(name, watchlist, signalsPerWeekByKey) >= FREQUENT_THRESHOLD
+  return firing || inScreener || setupLive || watch || frequent
 }
 
-// Full 7-tier sort key (lower sorts first). 1-5 are boolean gates (0 = it
-// qualifies for that tier); 6 breaks remaining ties by size of today's
-// move; 7 falls back to the asset's original watchlist position.
-function rankKey(name, index, watchlist, byAsset, screenerTickers) {
+// Full 8-tier sort key (lower sorts first). 1-5 are boolean gates (0 = it
+// qualifies for that tier); 6 ranks by playbook signal frequency; 7 breaks
+// remaining ties by size of today's move; 8 falls back to the asset's
+// original watchlist position.
+function rankKey(name, index, watchlist, byAsset, screenerTickers, signalsPerWeekByKey) {
   const bias = byAsset?.[name]?.bias
   const ticker = (watchlist[name]?.ticker || name).toUpperCase()
   const pct = byAsset?.[name]?.quote?.pct ?? 0
+  const spw = signalsPerWeekFor(name, watchlist, signalsPerWeekByKey)
   return [
     bias?.assigned_strategy && bias?.signaling_today ? 0 : 1, // 1: firing today
     screenerTickers.has(ticker) ? 0 : 1, // 2: screener hit
     bias?.color === 'green' || bias?.color === 'red' ? 0 : 1, // 3: setup live
     bias?.color === 'orange' ? 0 : 1, // 4: watch state
-    bias?.assigned_strategy ? 0 : 1, // 5: playbook-assigned, even if quiet
-    -Math.abs(pct), // 6: largest |day change %| first
-    index, // 7: original watchlist order
+    spw >= FREQUENT_THRESHOLD ? 0 : 1, // 5: frequent playbook pair (>=0.25 signals/wk)
+    -spw, // 6: higher signals/week ranks first (also orders the below-threshold pool)
+    -Math.abs(pct), // 7: largest |day change %| tiebreak
+    index, // 8: original watchlist order
   ]
 }
 
@@ -52,9 +68,12 @@ function compareRank(a, b) {
 }
 
 const EMPTY_SET = new Set()
+const EMPTY_MAP = new Map()
 
 export default function WatchlistGrid({
-  watchlist, names, byAsset, loading, flashKeys, screenerTickers = EMPTY_SET, onLongPress, onAddClick,
+  watchlist, names, byAsset, loading, flashKeys,
+  screenerTickers = EMPTY_SET, signalsPerWeekByKey = EMPTY_MAP,
+  onLongPress, onAddClick,
 }) {
   const navigate = useNavigate()
   const scrollRef = useRef(null)
@@ -70,16 +89,21 @@ export default function WatchlistGrid({
 
   if (canClassify) {
     const ranked = names
-      .map((n, i) => ({ name: n, key: rankKey(n, i, watchlist, byAsset, screenerTickers) }))
+      .map((n, i) => ({
+        name: n,
+        key: rankKey(n, i, watchlist, byAsset, screenerTickers, signalsPerWeekByKey),
+      }))
       .sort((a, b) => compareRank(a.key, b.key))
       .map((r) => r.name)
-    const activeTierCount = ranked.filter((n) => isActiveTier(n, watchlist, byAsset, screenerTickers)).length
+    const activeTierCount = ranked.filter((n) =>
+      isActiveTier(n, watchlist, byAsset, screenerTickers, signalsPerWeekByKey)
+    ).length
 
     if (activeTierCount > 4) {
       // More than 4 assets genuinely need attention — show all of them,
-      // paginated; only the truly quiet ones (tiers 5-7) collapse.
-      activeNames = ranked.filter((n) => isActiveTier(n, watchlist, byAsset, screenerTickers))
-      quietNames = ranked.filter((n) => !isActiveTier(n, watchlist, byAsset, screenerTickers))
+      // paginated; only the truly quiet ones (tiers 6-8) collapse.
+      activeNames = ranked.filter((n) => isActiveTier(n, watchlist, byAsset, screenerTickers, signalsPerWeekByKey))
+      quietNames = ranked.filter((n) => !isActiveTier(n, watchlist, byAsset, screenerTickers, signalsPerWeekByKey))
     } else {
       // Fewer than 4 (or zero) active assets — the grid never goes below
       // 4 cards (or the full watchlist, if smaller): top-ranked quiet
