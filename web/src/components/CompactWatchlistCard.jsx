@@ -16,7 +16,7 @@ function statusChip(bias) {
   return { icon: '😴', label: 'Quiet', color: 'var(--muted)' }
 }
 
-export default function CompactWatchlistCard({ name, unit, entry, loading, flash, onLongPress }) {
+export default function CompactWatchlistCard({ name, unit, entry, loading, flash, pinned, onLongPress }) {
   const navigate = useNavigate()
   const pressTimer = useRef(null)
   const longPressFired = useRef(false)
@@ -78,6 +78,7 @@ export default function CompactWatchlistCard({ name, unit, entry, loading, flash
       onTouchMove={clearPressTimer}
       onTouchCancel={clearPressTimer}
     >
+      {pinned && <span className="compact-card-pin" aria-hidden="true">📌</span>}
       <span className="compact-card-name">{name}</span>
       {feedDown ? (
         <span className="compact-card-feed-down">FEED DOWN</span>

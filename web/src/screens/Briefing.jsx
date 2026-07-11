@@ -6,9 +6,11 @@ import { useMacroRadar } from '../lib/useMacroRadar.js'
 import { useScreener } from '../lib/useScreener.js'
 import { useAssignments } from '../lib/useAssignments.js'
 import { useNotifications } from '../lib/useNotifications.js'
+import { useAuth } from '../lib/useAuth.js'
 import { matchAssetKey } from '../lib/matchAsset.js'
 import { api } from '../lib/api.js'
 import { showToast } from '../lib/toast.js'
+import { getPins, setPins as persistPins } from '../lib/pinnedAssets.js'
 import HealthDot from '../components/HealthDot.jsx'
 import TickerTape from '../components/TickerTape.jsx'
 import MacroHijackBanner from '../components/MacroHijackBanner.jsx'
@@ -21,9 +23,11 @@ import VoltBell from '../components/VoltBell.jsx'
 import UserBadge from '../components/UserBadge.jsx'
 import ConfirmDialog from '../components/ConfirmDialog.jsx'
 import WatchlistAddForm from '../components/WatchlistAddForm.jsx'
+import EditPinsSheet from '../components/EditPinsSheet.jsx'
 import './Briefing.css'
 
 export default function Briefing() {
+  const { user } = useAuth()
   const { watchlist, error: watchlistError, setWatchlist } = useWatchlist()
   const { data: macroEvents, loading: macroLoading } = useMacro()
   const { data: radar } = useMacroRadar()
@@ -34,7 +38,13 @@ export default function Briefing() {
   const [flashKeys, setFlashKeys] = useState(new Set())
   const [removeTarget, setRemoveTarget] = useState(null)
   const [showAddForm, setShowAddForm] = useState(false)
+  const [pins, setPinsState] = useState([])
+  const [showEditPins, setShowEditPins] = useState(false)
   const maxTsSeenRef = useRef(null)
+
+  useEffect(() => {
+    if (user?.id) setPinsState(getPins(user.id))
+  }, [user?.id])
 
   const names = watchlist ? Object.keys(watchlist) : []
   const { data: byAsset, loading: dataLoading } = useWatchlistData(names)
@@ -88,6 +98,11 @@ export default function Briefing() {
     }
   }
 
+  const handleSavePins = (newPins) => {
+    persistPins(user?.id, newPins)
+    setPinsState(newPins)
+  }
+
   return (
     <div className="briefing">
       {hijack ? (
@@ -121,8 +136,10 @@ export default function Briefing() {
         flashKeys={flashKeys}
         screenerTickers={screenerTickers}
         signalsPerWeekByKey={signalsPerWeekByKey}
+        pinnedNames={pins}
         onLongPress={setRemoveTarget}
         onAddClick={() => setShowAddForm(true)}
+        onEditPins={() => setShowEditPins(true)}
       />
 
       <MacroWeekTrack events={macroEvents} loading={macroLoading} />
@@ -149,6 +166,15 @@ export default function Briefing() {
         <WatchlistAddForm
           onClose={() => setShowAddForm(false)}
           onSaved={(wl) => setWatchlist(wl)}
+        />
+      )}
+
+      {showEditPins && (
+        <EditPinsSheet
+          names={names}
+          pinned={pins}
+          onClose={() => setShowEditPins(false)}
+          onSave={handleSavePins}
         />
       )}
     </div>

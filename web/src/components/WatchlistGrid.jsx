@@ -39,6 +39,15 @@ function isActiveTier(name, watchlist, byAsset, screenerTickers, signalsPerWeekB
   return firing || inScreener || setupLive || watch || frequent
 }
 
+// The only two tiers a pin can never outrank — a live playbook signal or a
+// screener hit always claims its grid slot regardless of anyone's pins.
+function isSignalOrScreener(name, watchlist, byAsset, screenerTickers) {
+  const bias = byAsset?.[name]?.bias
+  const ticker = (watchlist[name]?.ticker || name).toUpperCase()
+  const firing = !!(bias?.assigned_strategy && bias?.signaling_today)
+  return firing || screenerTickers.has(ticker)
+}
+
 // Full 8-tier sort key (lower sorts first). 1-5 are boolean gates (0 = it
 // qualifies for that tier); 6 ranks by playbook signal frequency; 7 breaks
 // remaining ties by size of today's move; 8 falls back to the asset's
@@ -69,11 +78,13 @@ function compareRank(a, b) {
 
 const EMPTY_SET = new Set()
 const EMPTY_MAP = new Map()
+const EMPTY_ARRAY = []
 
 export default function WatchlistGrid({
   watchlist, names, byAsset, loading, flashKeys,
   screenerTickers = EMPTY_SET, signalsPerWeekByKey = EMPTY_MAP,
-  onLongPress, onAddClick,
+  pinnedNames = EMPTY_ARRAY,
+  onLongPress, onAddClick, onEditPins,
 }) {
   const navigate = useNavigate()
   const scrollRef = useRef(null)
@@ -86,6 +97,7 @@ export default function WatchlistGrid({
   const canClassify = !!byAsset
   let activeNames = names
   let quietNames = []
+  const pinnedSet = new Set(pinnedNames)
 
   if (canClassify) {
     const ranked = names
@@ -98,19 +110,29 @@ export default function WatchlistGrid({
     const activeTierCount = ranked.filter((n) =>
       isActiveTier(n, watchlist, byAsset, screenerTickers, signalsPerWeekByKey)
     ).length
+    // Grid capacity is unaffected by pins — only pin PRECEDENCE changes.
+    // Zero pins: priorityOrder below collapses back to `ranked` exactly
+    // (signal/screener tiers already sort first in `ranked` itself), so
+    // this is provably identical to the pre-pin behavior.
+    const gridSize = activeTierCount > 4 ? activeTierCount : 4
 
-    if (activeTierCount > 4) {
-      // More than 4 assets genuinely need attention — show all of them,
-      // paginated; only the truly quiet ones (tiers 6-8) collapse.
-      activeNames = ranked.filter((n) => isActiveTier(n, watchlist, byAsset, screenerTickers, signalsPerWeekByKey))
-      quietNames = ranked.filter((n) => !isActiveTier(n, watchlist, byAsset, screenerTickers, signalsPerWeekByKey))
-    } else {
-      // Fewer than 4 (or zero) active assets — the grid never goes below
-      // 4 cards (or the full watchlist, if smaller): top-ranked quiet
-      // assets get promoted to fill it, so it's never empty on a quiet day.
-      activeNames = ranked.slice(0, 4)
-      quietNames = ranked.slice(4)
-    }
+    // Exact precedence: live signal/screener always wins a slot, even over
+    // a pin; remaining slots go to pins in pin order; anything still open
+    // falls back to the existing auto-rank (tiers 3-8 of `ranked`). Drop
+    // any pin whose asset no longer exists on the watchlist.
+    const signalSet = new Set(
+      ranked.filter((n) => isSignalOrScreener(n, watchlist, byAsset, screenerTickers))
+    )
+    const validPins = pinnedNames.filter((n) => names.includes(n) && !signalSet.has(n))
+    const pinSet = new Set(validPins)
+    const priorityOrder = [
+      ...ranked.filter((n) => signalSet.has(n)),
+      ...validPins,
+      ...ranked.filter((n) => !signalSet.has(n) && !pinSet.has(n)),
+    ]
+
+    activeNames = priorityOrder.slice(0, gridSize)
+    quietNames = priorityOrder.slice(gridSize)
   }
 
   const pages = chunk4([...activeNames, ADD_TILE])
@@ -150,6 +172,11 @@ export default function WatchlistGrid({
 
   return (
     <div className="watchlist-grid-wrap">
+      <div className="wg-header">
+        <button type="button" className="wg-edit-pins-btn" onClick={onEditPins}>
+          📌 <span className="wg-edit-pins-label">Edit Top 4</span>
+        </button>
+      </div>
       <div className="wg-inner">
         <div className="wg-scroll" ref={scrollRef} onScroll={onScroll}>
           {pages.map((pageItems, pi) => (
@@ -165,6 +192,7 @@ export default function WatchlistGrid({
                     entry={byAsset?.[item]}
                     loading={!byAsset && loading}
                     flash={flashKeys?.has(item)}
+                    pinned={pinnedSet.has(item)}
                     onLongPress={onLongPress}
                   />
                 )
