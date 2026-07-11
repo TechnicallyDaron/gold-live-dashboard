@@ -28,6 +28,7 @@ from collections import deque
 import quant_core as qc
 from api import ai
 from api import analytics
+from api import feed
 from api import db, screener, store
 from pydantic import BaseModel
 import asyncio
@@ -136,6 +137,9 @@ def get_current_user(authorization: str | None = Header(default=None)):
 def me(user: dict = Depends(get_current_user)):
     return {"user": {"id": user.get("id"), "email": user.get("email")},
             "mode": user.get("mode", "supabase")}
+
+
+ACTIVE_FEED = feed.install()
 
 
 @app.get("/api/health")
@@ -456,6 +460,18 @@ def add_position(body: PositionBody, user: dict = Depends(get_current_user)):
 @app.get("/api/screener")
 def api_screener():
     return store.get_screener()
+
+
+@app.get("/api/feedcheck")
+def api_feedcheck(user: dict = Depends(get_current_user)):
+    """Bar-for-bar yfinance vs Massive/Polygon comparison. Run this AFTER
+    setting POLYGON_API_KEY but BEFORE flipping DATA_PROVIDER — cutover
+    only when it says cutover_safe: true."""
+    if not os.getenv("POLYGON_API_KEY"):
+        raise HTTPException(status_code=400,
+                            detail="Set POLYGON_API_KEY on the api service first.")
+    return {"active_feed": ACTIVE_FEED,
+            **feed.feed_check(["SPY", "QQQ", "NVDA", "GLD", "IWM", "TLT"])}
 
 
 @app.get("/api/playbook")
