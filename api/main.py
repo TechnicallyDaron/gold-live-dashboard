@@ -158,9 +158,25 @@ def positions(user: dict = Depends(get_current_user)):
     return store.get_positions(store.resolve_user(user))
 
 
+def resolve_asset_for(user, key: str):
+    """Multi-tenant asset resolution. A user's display names live in THEIR
+    Supabase watchlist, not the operator's file — so consult theirs first
+    (matching display name OR ticker, case-insensitive), then fall back to
+    the legacy file resolution, then raw-ticker."""
+    try:
+        uid = store.resolve_user(user)
+        kl = key.strip().lower()
+        for name, d in store.get_watchlist(uid).items():
+            if name.lower() == kl or str(d.get("ticker", "")).lower() == kl:
+                return d["ticker"], name, d.get("unit") or "/sh"
+    except Exception:
+        pass
+    return qc.resolve_ticker(key)
+
+
 @app.get("/api/quote/{asset}")
-def quote(asset: str):
-    ticker, name, unit = qc.resolve_ticker(asset)
+def quote(asset: str, user: dict = Depends(get_current_user)):
+    ticker, name, unit = resolve_asset_for(user, asset)
     q = qc.get_quote(ticker)
     if q is None:
         raise HTTPException(status_code=502, detail=f"Feed down for {ticker}")
@@ -168,8 +184,8 @@ def quote(asset: str):
 
 
 @app.get("/api/bias/{asset}")
-def bias(asset: str):
-    ticker, name, unit = qc.resolve_ticker(asset)
+def bias(asset: str, user: dict = Depends(get_current_user)):
+    ticker, name, unit = resolve_asset_for(user, asset)
     try:
         b = qc.get_bias(ticker)
     except Exception:
@@ -196,11 +212,12 @@ def bias(asset: str):
 
 
 @app.get("/api/backtest/{asset}")
-def backtest(asset: str, strategy: str = "meanrev"):
+def backtest(asset: str, strategy: str = "meanrev",
+             user: dict = Depends(get_current_user)):
     if strategy not in qc.STRATEGIES:
         raise HTTPException(status_code=400,
                             detail=f"Unknown strategy. Options: {list(qc.STRATEGIES)}")
-    ticker, name, _ = qc.resolve_ticker(asset)
+    ticker, name, _ = resolve_asset_for(user, asset)
     try:
         trades, stats = qc.run_backtest(ticker, strategy)
     except Exception:
@@ -220,8 +237,8 @@ def macro():
 
 
 @app.get("/api/news/{asset}")
-def news(asset: str):
-    ticker, _, _ = qc.resolve_ticker(asset)
+def news(asset: str, user: dict = Depends(get_current_user)):
+    ticker, _, _ = resolve_asset_for(user, asset)
     return qc.news_items(ticker)
 
 
@@ -241,11 +258,12 @@ def tape():
 
 
 @app.get("/api/history/{asset}")
-def history(asset: str, days: int = 500):
+def history(asset: str, days: int = 500,
+            user: dict = Depends(get_current_user)):
     """Chart series: price + 20EMA baseline + ±2σ bands + 200EMA macro.
     Rows are chronological; NaN indicator rows are dropped."""
     days = max(30, min(days, 1300))
-    ticker, name, unit = qc.resolve_ticker(asset)
+    ticker, name, unit = resolve_asset_for(user, asset)
     try:
         df = qc.fetch_history(ticker)
     except Exception:
@@ -287,6 +305,7 @@ def _ai_gate(user: dict):
 @app.post("/api/ask")
 def api_ask(body: AskBody, user: dict = Depends(get_current_user)):
     _ai_gate(user)
+    body.asset = resolve_asset_for(user, body.asset)[0]
     try:
         return {"answer": ai.ask(body.asset, body.question),
                 "usage": ai.usage_today()}
@@ -299,6 +318,7 @@ def api_ask(body: AskBody, user: dict = Depends(get_current_user)):
 @app.get("/api/sentiment/{asset}")
 def api_sentiment(asset: str, user: dict = Depends(get_current_user)):
     _ai_gate(user)
+    asset = resolve_asset_for(user, asset)[0]
     try:
         return ai.sentiment(asset)
     except ai.AIUnavailable:
@@ -308,7 +328,8 @@ def api_sentiment(asset: str, user: dict = Depends(get_current_user)):
 
 
 @app.get("/api/optimized-edge/{asset}")
-def optimized_edge(asset: str):
+def optimized_edge(asset: str, user: dict = Depends(get_current_user)):
+    asset = resolve_asset_for(user, asset)[0]
     try:
         return analytics.optimized_edge(asset)
     except Exception:
@@ -329,6 +350,7 @@ class ValidateBody(BaseModel):
 @app.post("/api/validate")
 def api_validate(body: ValidateBody, user: dict = Depends(get_current_user)):
     _ai_gate(user)
+    body.asset = resolve_asset_for(user, body.asset)[0]
     try:
         return {**ai.validate(body.asset, body.entry, body.side), "usage": ai.usage_today()}
     except ai.AIUnavailable:
@@ -340,7 +362,8 @@ def api_validate(body: ValidateBody, user: dict = Depends(get_current_user)):
 
 
 @app.get("/api/strategy-lab/{asset}")
-def strategy_lab(asset: str):
+def strategy_lab(asset: str, user: dict = Depends(get_current_user)):
+    asset = resolve_asset_for(user, asset)[0]
     try:
         return analytics.strategy_lab(asset)
     except Exception:
@@ -592,8 +615,8 @@ def shield(user: dict = Depends(get_current_user)):
 
 
 @app.get("/api/exhaustion/{asset}")
-def exhaustion(asset: str):
-    ticker, name, _ = qc.resolve_ticker(asset)
+def exhaustion(asset: str, user: dict = Depends(get_current_user)):
+    ticker, name, _ = resolve_asset_for(user, asset)
     try:
         return {"asset": name, "ticker": ticker, **analytics.exhaustion_state(ticker)}
     except Exception:
