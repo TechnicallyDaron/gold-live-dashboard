@@ -149,6 +149,23 @@ def _download_next_earnings(ticker: str):
     return None
 
 
+def _download_ticker_name(ticker: str):
+    try:
+        info = yf.Ticker(ticker).info
+        return info.get("shortName") or info.get("longName")
+    except Exception:
+        return None
+
+
+def get_ticker_name(ticker: str):
+    """Company/asset display name, cached 12h. Falls back to the ticker."""
+    try:
+        n = _cached(f"tname:{ticker}", 43200, lambda: _download_ticker_name(ticker))
+        return n or ticker.upper()
+    except Exception:
+        return ticker.upper()
+
+
 def get_next_earnings(ticker: str):
     """Next earnings date as ISO string, or None. Cached 12h; never raises."""
     try:
@@ -184,6 +201,8 @@ STRATEGIES = {
             "desc": "RSI(14) below 30 / above 70 with the trend filter \u2192 exit at RSI 50"},
     "pullback": {"name": "Trend Pullback",
                  "desc": "Shallow dip (\u22120.75\u03C3) WITH the 200 EMA trend \u2192 exit at +0.5\u03C3. Built for weekly-cadence signals."},
+    "ema920": {"name": "RSI & 9/20 Confluence",
+               "desc": "RSI stretch (\u226435 or \u226565) resolved by the 9 EMA crossing the 20 EMA on a confirmed close \u2192 ride until the cross reverses"},
     "breakout52": {"name": "Catalyst Momentum",
                    "desc": "Fresh 52-week-high breakout on elevated volume \u2192 ride the post-breakout drift, exit on trend loss"},
     "gapfade": {"name": "Gap Reversal",
@@ -218,6 +237,10 @@ def _run_backtest(ticker: str, strategy: str, df=None):
     valid["RSI2"] = 100 - 100 / (1 + g2 / l2.replace(0, np.nan))
     sigma = (valid["Upper_Band"] - valid["Baseline"]) / 2.0
     valid["Z"] = (valid["Price"] - valid["Baseline"]) / sigma.replace(0, np.nan)
+    valid["EMA9"] = valid["Price"].ewm(span=9, adjust=False).mean()
+    valid["PrevEMA9"] = valid["EMA9"].shift(1)
+    valid["RSI_MINW"] = valid["RSI"].rolling(10, min_periods=1).min()
+    valid["RSI_MAXW"] = valid["RSI"].rolling(10, min_periods=1).max()
     valid["P252H"] = valid["High"].shift(1).rolling(252, min_periods=200).max()
     valid["P252L"] = valid["Low"].shift(1).rolling(252, min_periods=200).min()
     valid["PrevClose"] = valid["Price"].shift(1)
@@ -259,6 +282,10 @@ def _run_backtest(ticker: str, strategy: str, df=None):
         prev_c = None if pd.isna(bar.PrevClose) else float(bar.PrevClose)
         prev_b = None if pd.isna(bar.PrevBaseline) else float(bar.PrevBaseline)
         volr_ok = pd.isna(bar.VolR) or float(bar.VolR) >= 1.5
+        ema9 = None if pd.isna(bar.EMA9) else float(bar.EMA9)
+        prev9 = None if pd.isna(bar.PrevEMA9) else float(bar.PrevEMA9)
+        rsi_min5 = None if pd.isna(bar.RSI_MINW) else float(bar.RSI_MINW)
+        rsi_max5 = None if pd.isna(bar.RSI_MAXW) else float(bar.RSI_MAXW)
         rsi2_v = None if pd.isna(bar.RSI2) else float(bar.RSI2)
         z_v = None if pd.isna(bar.Z) else float(bar.Z)
 
@@ -284,7 +311,9 @@ def _run_backtest(ticker: str, strategy: str, df=None):
                (strategy == "rsi2" and rsi2_v is not None and rsi2_v >= 65) or \
                (strategy == "breakout52" and close < baseline_v) or \
                (strategy == "gapfade" and z_v is not None and z_v >= 0.0) or \
-               (strategy == "trend" and close < baseline_v):
+               (strategy == "trend" and close < baseline_v) or \
+               (strategy == "ema920" and ema9 is not None and prev9 is not None
+                and prev_b is not None and prev9 >= prev_b and ema9 < baseline_v):
                 pending_exit_label = "Long Exit (Signal)"
         elif position == -1:
             if (strategy == "meanrev" and close <= baseline_v) or \
@@ -294,7 +323,9 @@ def _run_backtest(ticker: str, strategy: str, df=None):
                (strategy == "rsi2" and rsi2_v is not None and rsi2_v <= 35) or \
                (strategy == "breakout52" and close > baseline_v) or \
                (strategy == "gapfade" and z_v is not None and z_v <= 0.0) or \
-               (strategy == "trend" and close > baseline_v):
+               (strategy == "trend" and close > baseline_v) or \
+               (strategy == "ema920" and ema9 is not None and prev9 is not None
+                and prev_b is not None and prev9 <= prev_b and ema9 > baseline_v):
                 pending_exit_label = "Short Exit (Signal)"
 
         if position == 0 and pending_entry == 0:
@@ -333,6 +364,11 @@ def _run_backtest(ticker: str, strategy: str, df=None):
                     pending_entry = 1
                 elif open_ >= prev_c * 1.015 and close < open_ and close < macro_v:
                     pending_entry = -1
+            elif strategy == "ema920" and None not in (ema9, prev9, prev_b, rsi_min5, rsi_max5):
+                if prev9 <= prev_b and ema9 > baseline_v and rsi_min5 <= 35:
+                    pending_entry = 1        # oversold stretch resolved by the 9/20 cross up
+                elif prev9 >= prev_b and ema9 < baseline_v and rsi_max5 >= 65:
+                    pending_entry = -1       # overbought stretch resolved by the cross down
             elif strategy == "trend" and prev_c is not None and prev_b is not None and z_v is not None:
                 if prev_c <= prev_b and close > baseline_v and close > macro_v and z_v <= 1.0:
                     pending_entry = 1

@@ -356,8 +356,8 @@ PERSISTENCE_WARNING = ("Saved to the live service. NOTE: Railway's filesystem re
 
 
 class WatchBody(BaseModel):
-    name: str
     ticker: str
+    name: str | None = None      # omitted → resolved server-side from the ticker
     unit: str = "/sh"
 
 
@@ -365,11 +365,13 @@ class WatchBody(BaseModel):
 def add_watchlist(body: WatchBody, user: dict = Depends(get_current_user)):
     uid = store.resolve_user(user)
     wl = store.get_watchlist(uid)
-    if body.name in wl:
-        raise HTTPException(status_code=409, detail=f"'{body.name}' already tracked.")
-    if qc.get_quote(body.ticker.upper()) is None:
-        raise HTTPException(status_code=422, detail=f"{body.ticker.upper()} returned no data from the feed.")
-    store.add_watchlist(uid, body.name, body.ticker.upper(), body.unit)
+    ticker = body.ticker.upper().strip()
+    if qc.get_quote(ticker) is None:
+        raise HTTPException(status_code=422, detail=f"{ticker} returned no data from the feed.")
+    name = (body.name or "").strip() or qc.get_ticker_name(ticker)
+    if name in wl or any(d["ticker"] == ticker for d in wl.values()):
+        raise HTTPException(status_code=409, detail=f"'{name}' already tracked.")
+    store.add_watchlist(uid, name, ticker, body.unit)
     out = {"watchlist": store.get_watchlist(uid)}
     if not uid:
         out["persistence_warning"] = PERSISTENCE_WARNING
@@ -431,6 +433,13 @@ def add_position(body: PositionBody, user: dict = Depends(get_current_user)):
 @app.get("/api/screener")
 def api_screener():
     return store.get_screener()
+
+
+@app.get("/api/playbook")
+def api_playbook():
+    """All assignments with their validation stats — powers the Hub's
+    frequency-based re-layering. signals_per_week is the sort key."""
+    return {"assignments": store.get_playbook_stats()}
 
 
 @app.get("/api/ledger")
@@ -651,8 +660,9 @@ def _agent_pass():
         except Exception:
             pass
 
-    # 2) Exhaustion: spent thrusts at extremes
-    for name, d in qc.load_watchlist().items():
+    alerts_full = os.getenv("ALERTS", "full").lower() != "core"
+    # 2) Exhaustion: spent thrusts at extremes (research chatter — full mode only)
+    for name, d in (qc.load_watchlist().items() if alerts_full else []):
         try:
             st = analytics.exhaustion_state(d["ticker"])
         except Exception:
@@ -765,7 +775,7 @@ def _agent_pass():
     #    Any watchlist name moving hard on the day gets ONE ping. The copy
     #    warns against chasing — awareness without an invitation.
     day_move_min = float(os.getenv("DAY_MOVE_ALERT_PCT", "3.0"))
-    for name, d in qc.load_watchlist().items():
+    for name, d in (qc.load_watchlist().items() if alerts_full else []):
         try:
             q = qc.get_quote(d["ticker"])
         except Exception:
@@ -786,7 +796,9 @@ def _agent_pass():
         tg_send(TELEGRAM_CHAT_ID, f"{arrow} <b>BIG MOVE \u2014 {name} {pct:+.1f}%</b>\n\n{body}")
         notify("daymove", f"{arrow} {name} {pct:+.1f}% today", body)
 
-    # 4) Macro proximity: big USD news inside the 3-hour window
+    # 4) Macro proximity: big USD news inside the 3-hour window (full mode only)
+    if not alerts_full:
+        return
     try:
         rad = analytics.macro_radar()
         if rad.get("hijack") and rad.get("nearest"):

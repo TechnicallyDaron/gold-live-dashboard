@@ -233,7 +233,8 @@ def save_playbook_assignment(key: str, strategy: str, strategy_name: str,
             if stats:
                 row.update({"oos_win_rate": stats.get("win_rate"),
                             "oos_profit_factor": stats.get("profit_factor"),
-                            "oos_expectancy_pct": stats.get("expectancy_pct")})
+                            "oos_expectancy_pct": stats.get("expectancy_pct"),
+                            "oos_signals_per_week": stats.get("signals_per_week")})
             db.upsert("playbooks", row, on_conflict="user_id,asset_key")
         except Exception:
             pass
@@ -300,3 +301,27 @@ def get_ledger(limit: int = 200) -> list:
         except Exception:
             return []
     return list(reversed(_ledger_file()))[:limit]
+
+
+def get_playbook_stats() -> list:
+    """Assignments with validation stats for the frontend."""
+    if db.enabled() and OPERATOR:
+        try:
+            rows = db.select("playbooks", {"user_id": OPERATOR},
+                             order="oos_signals_per_week.desc.nullslast")
+            return [{"key": r["asset_key"], "strategy": r["strategy"],
+                     "strategy_name": r["strategy_name"], "assigned_at": r["assigned_at"],
+                     "win_rate": r.get("oos_win_rate"),
+                     "profit_factor": r.get("oos_profit_factor"),
+                     "signals_per_week": r.get("oos_signals_per_week")} for r in rows]
+        except Exception:
+            pass
+    try:
+        with open("playbook.json") as f:
+            pb = json.load(f).get("assignments") or {}
+        return [{"key": k, "strategy": a.get("strategy"),
+                 "strategy_name": a.get("name"), "assigned_at": a.get("assigned_at"),
+                 "win_rate": None, "profit_factor": None, "signals_per_week": None}
+                for k, a in pb.items()]
+    except Exception:
+        return []

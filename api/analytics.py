@@ -125,6 +125,21 @@ def _signals_today(ticker: str) -> dict:
             out["gapfade"] = "short"
     prev_b = float(df["Baseline"].iloc[-2]) if len(df) > 1 else None
     baseline_v = float(row["Baseline"])
+    # ── ema920 mirror ──
+    ema9_s = df["Price"].ewm(span=9, adjust=False).mean()
+    ema9, prev9 = float(ema9_s.iloc[-1]), (float(ema9_s.iloc[-2]) if len(df) > 1 else None)
+    delta = df["Price"].diff()
+    gain = delta.clip(lower=0).ewm(alpha=1 / 14, adjust=False).mean()
+    loss = (-delta.clip(upper=0)).ewm(alpha=1 / 14, adjust=False).mean()
+    rsi14 = 100 - 100 / (1 + gain / loss.replace(0, __import__("numpy").nan))
+    rsi_min5 = float(rsi14.rolling(10, min_periods=1).min().iloc[-1])
+    rsi_max5 = float(rsi14.rolling(10, min_periods=1).max().iloc[-1])
+    out["ema920"] = None
+    if prev9 is not None and prev_b is not None:
+        if prev9 <= prev_b and ema9 > baseline_v and rsi_min5 <= 35:
+            out["ema920"] = "long"
+        elif prev9 >= prev_b and ema9 < baseline_v and rsi_max5 >= 65:
+            out["ema920"] = "short"
     out["trend"] = None
     if prev_c is not None and prev_b is not None:
         if prev_c <= prev_b and close > baseline_v and close > macro_v and z_v <= 1.0:
@@ -606,6 +621,7 @@ STRATEGY_PLAIN = {
     "breakout52": "ride fresh 52-week breakouts on big volume",
     "gapfade": "buy panic gaps that recover inside an uptrend",
     "trend": "ride the trend after price reclaims its average",
+    "ema920": "RSI stretch resolved by the 9/20 cross",
 }
 
 
@@ -990,3 +1006,16 @@ def signal_levels(ticker: str, family: str, side: str) -> dict:
             "guide": round(guide, 2) if guide else None,
             "guide_label": guide_label,
             "ledger_target": round(ledger_target, 2) if ledger_target else None}
+
+
+def current_rsi14(ticker: str):
+    try:
+        df = qc.fetch_history(ticker)
+        delta = df["Price"].diff()
+        gain = delta.clip(lower=0).ewm(alpha=1 / 14, adjust=False).mean()
+        loss = (-delta.clip(upper=0)).ewm(alpha=1 / 14, adjust=False).mean()
+        rsi = 100 - 100 / (1 + gain / loss.replace(0, np.nan))
+        v = float(rsi.iloc[-1])
+        return round(v) if v == v else None
+    except Exception:
+        return None
