@@ -33,6 +33,8 @@ def _get(path: str, params: dict | None = None) -> dict:
     if r.status_code == 429:              # rate-limited: one polite retry
         time.sleep(1.5)
         r = requests.get(f"{BASE}{path}", params=p, timeout=15)
+    if r.status_code != 200:              # X-ray for Railway logs
+        print(f"[feed] {r.status_code} {path[:60]}", flush=True)
     r.raise_for_status()
     return r.json()
 
@@ -214,16 +216,89 @@ def feed_check(tickers: list) -> dict:
             "detail": report}
 
 
+# ── HYBRID ROUTING ───────────────────────────────────────────
+# The stocks plan covers US equities/ETFs only. Futures (GC=F), indices
+# (^GSPC), and crypto (BTC-USD) route to yfinance exactly as before —
+# and ANY polygon failure falls back to yfinance rather than erroring.
+_ORIG: dict = {}
+
+
+def _polygon_supported(ticker: str) -> bool:
+    t = ticker.upper()
+    return not ("=" in t or t.startswith("^") or t.endswith("-USD") or ":" in t)
+
+
+def _routed_history(ticker: str):
+    if _polygon_supported(ticker):
+        try:
+            return polygon_history(ticker)
+        except Exception as e:
+            print(f"[feed] history fallback->yf {ticker}: {str(e)[:60]}", flush=True)
+    return _ORIG["history"](ticker)
+
+
+def _routed_quote(ticker: str):
+    if _polygon_supported(ticker):
+        try:
+            q = polygon_quote(ticker)
+            if q is not None:
+                return q
+        except Exception as e:
+            print(f"[feed] quote fallback->yf {ticker}: {str(e)[:60]}", flush=True)
+    return _ORIG["quote"](ticker)
+
+
+def _routed_ticker_name(ticker: str):
+    if _polygon_supported(ticker):
+        try:
+            n = polygon_ticker_name(ticker)
+            if n:
+                return n
+        except Exception:
+            pass
+    return _ORIG["tname"](ticker)
+
+
+def _routed_universe_hist(batch: list) -> dict:
+    pg = [t for t in batch if _polygon_supported(t)]
+    yf_b = [t for t in batch if not _polygon_supported(t)]
+    out = polygon_universe_hist(pg) if pg else {}
+    if yf_b:
+        try:
+            out.update(_ORIG["universe_hist"](yf_b))
+        except Exception:
+            pass
+    return out
+
+
+def _routed_screener_universe(tickers: list) -> dict:
+    pg = [t for t in tickers if _polygon_supported(t)]
+    yf_b = [t for t in tickers if not _polygon_supported(t)]
+    out = polygon_universe_recent(pg) if pg else {}
+    if yf_b:
+        try:
+            out.update(_ORIG["screener_universe"](yf_b))
+        except Exception:
+            pass
+    return out
+
+
 def install() -> str:
     """Re-point the seams if the operator has flipped the switch.
-    Returns the active provider name for the startup log."""
+    Originals are preserved — routing falls back to them for anything
+    the stocks plan can't serve."""
     if os.getenv("DATA_PROVIDER", "yfinance").lower() != "polygon" or not _key():
         return "yfinance"
     import quant_core as qc
     from api import analytics, screener
-    qc._download_history = polygon_history
-    qc._download_quote = polygon_quote
-    qc._download_ticker_name = polygon_ticker_name
-    analytics._download_universe_hist = polygon_universe_hist
-    screener._download_universe = lambda tickers: polygon_universe_recent(tickers)
-    return "polygon (Massive)"
+    _ORIG.setdefault("history", qc._download_history)
+    _ORIG.setdefault("quote", qc._download_quote)
+    _ORIG.setdefault("tname", qc._download_ticker_name)
+    _ORIG.setdefault("universe_hist", analytics._download_universe_hist)
+    _ORIG.setdefault("screener_universe", screener._download_universe)
+    qc._download_history = _routed_history
+    qc._download_quote = _routed_quote
+    qc._download_ticker_name = _routed_ticker_name
+    analytics._download_universe_hist = _routed_universe_hist
+    screener._download_universe = _routed_screener_universe
+    return "polygon (Massive) + yfinance hybrid"
