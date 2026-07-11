@@ -655,20 +655,48 @@ def _agent_pass():
     today = date.today().isoformat()
 
     # 1) Playbook: assigned strategies firing on the live close
-    for h in analytics.scan_playbook():
+    _pb_hits = analytics.scan_playbook()
+    _fam_counts = {}
+    for h in _pb_hits:
+        _fam_counts[h["strategy"]] = _fam_counts.get(h["strategy"], 0) + 1
+    for _fam, _cnt in _fam_counts.items():
+        if _cnt >= 3 and not store.cooldown_active(f"clus:{_fam}:{today}"):
+            store.cooldown_set(f"clus:{_fam}:{today}", 20)
+            _fam_name = qc.STRATEGIES.get(_fam, {}).get("name", _fam)
+            tg_send(TELEGRAM_CHAT_ID,
+                    f"\u26A0\uFE0F <b>CLUSTER WARNING \u2014 {_cnt} {_fam_name} signals "
+                    f"firing together.</b>\n\nCorrelated setups triggered by the same "
+                    f"market move are ONE bet wearing {_cnt} costumes \u2014 if the market "
+                    f"keeps falling, they lose together. Sizing law: pick the strongest "
+                    f"single name (best win rate, tightest spread) and size it as ONE "
+                    f"trade. The Ledger grades every one of them either way.")
+    for h in _pb_hits:
         k = f"pb:{h['ticker']}:{h['side']}"
         if store.cooldown_active(k):
             continue
         store.cooldown_set(k, ALERT_COOLDOWN_H)
-        verb = "buy-the-dip" if h["side"] == "long" else "fade-the-spike"
-        px = f" at ${h['price']:,.2f}" if h.get("price") else ""
-        body = (f"{h['asset']}{px}: your validated {h['strategy_name']} strategy "
-                f"just fired a {verb} setup. This is the exact pattern that made "
-                f"money in walk-forward testing \u2014 check the app for levels.")
+        plain = analytics.STRATEGY_PLAIN.get(h["strategy"], "validated setup")
+        FAMILY_WINDOW = {"rsi2": "3\u20137 days", "gapfade": "3\u20137 days",
+                         "meanrev": "1\u20132 weeks", "rsi": "1\u20132 weeks",
+                         "pullback": "1\u20132 weeks", "ema920": "2\u20134 weeks",
+                         "trend": "2\u20134 weeks", "breakout": "2\u20134 weeks",
+                         "breakout52": "2\u20134 weeks"}
+        side_word = "call side" if h["side"] == "long" else "put side"
+        rsi_note = ""
+        if h["strategy"] in ("rsi", "rsi2", "ema920"):
+            rv = analytics.current_rsi14(h["ticker"])
+            if rv is not None:
+                rsi_note = f"RSI {rv} \u00b7 "
+        sig_px = f"signal ${h['price']:,.2f}" if h.get("price") else "signal at the close"
+        body = (f"{h['strategy_name']} Setup \u2014 <b>{h['asset']}</b>: "
+                f"{rsi_note}{plain} confirmed on the close.\n"
+                f"Setup: {side_word} \u00b7 {sig_px} \u00b7 pattern typically "
+                f"resolves in ~{FAMILY_WINDOW.get(h['strategy'], '1\u20132 weeks')}. "
+                f"Ledger-tracked from this moment.")
         lv = None
         try:
             lv = analytics.signal_levels(h["ticker"], h["strategy"], h["side"])
-            body += (f"\n\nSignal ${lv['entry']:,.2f} \u00b7 hard stop ${lv['stop']:,.2f}"
+            body += (f"\nHard stop ${lv['stop']:,.2f}"
                      + (f" \u00b7 {lv['guide_label'].split(' (')[0].lower()} "
                         f"${lv['guide']:,.2f}" if lv.get("guide") else ""))
         except Exception:
@@ -1632,8 +1660,8 @@ async def telegram_webhook(
         asyncio.create_task(_run_lab_book(chat_id))
         return {"ok": True}
     if reply == "__ULAB__":
-        tg_send(chat_id, "\U0001F52D <b>Universe Lab launched</b> \u2014 every name in "
-                "the 298-ticker universe takes the full 8-family walk-forward exam. "
+        tg_send(chat_id, f"\U0001F52D <b>Universe Lab launched</b> \u2014 every name in "
+                f"the universe takes the full {len(qc.STRATEGIES)}-family walk-forward exam. "
                 "This is a batch job: expect 20\u201340 minutes with progress pings. "
                 "Fully resumable \u2014 if it runs out of budget, /ulab again continues "
                 "where it stopped.")
