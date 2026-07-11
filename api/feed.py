@@ -34,7 +34,43 @@ def _get(path: str, params: dict | None = None) -> dict:
     return r.json()
 
 
-def _aggs(ticker: str, days: int) -> pd.DataFrame:
+def _dividends(ticker: str, start: str) -> list:
+    """[(ex_date_ts, cash_amount)] since start. Empty on any failure."""
+    try:
+        j = _get("/v3/reference/dividends",
+                 {"ticker": ticker.upper(), "ex_dividend_date.gte": start,
+                  "limit": 1000})
+        return [(pd.Timestamp(r["ex_dividend_date"]), float(r["cash_amount"]))
+                for r in (j.get("results") or [])
+                if r.get("ex_dividend_date") and r.get("cash_amount")]
+    except Exception:
+        return []
+
+
+def _adjust_for_dividends(df: pd.DataFrame, divs: list) -> pd.DataFrame:
+    """Yahoo-style proportional back-adjustment: bars BEFORE each ex-div
+    date scale by (1 - dividend/prior close). Keeps the engine's bars in
+    the same dialect the entire validated playbook was built on. Volume
+    is never touched."""
+    if not divs:
+        return df
+    adj = pd.Series(1.0, index=df.index)
+    for ex_date, amount in divs:
+        prior = df.index[df.index < ex_date]
+        if not len(prior):
+            continue
+        c = float(df.loc[prior[-1], "Price"])
+        if c <= 0:
+            continue
+        f = 1.0 - amount / c
+        if 0 < f < 1:
+            adj[df.index < ex_date] *= f
+    for col in ("Open", "High", "Low", "Price"):
+        df[col] = df[col] * adj
+    return df
+
+
+def _aggs(ticker: str, days: int, adjust_divs: bool = False) -> pd.DataFrame:
     """Daily aggregates → engine-shaped frame (Open/High/Low/Price[/Volume])."""
     end = datetime.today()
     start = end - timedelta(days=days)
@@ -51,12 +87,16 @@ def _aggs(ticker: str, days: int) -> pd.DataFrame:
                        "Price": [r["c"] for r in rows],
                        "Volume": [r.get("v") for r in rows]},
                       index=idx).astype(float)
+    if adjust_divs:
+        start = (datetime.today() - timedelta(days=days)).strftime("%Y-%m-%d")
+        df = _adjust_for_dividends(df, _dividends(ticker, start))
     return df
 
 
 def polygon_history(ticker: str) -> pd.DataFrame:
-    """Drop-in for qc._download_history (5y daily, Close→Price)."""
-    return _aggs(ticker, 1825)[["Open", "High", "Low", "Price"]]
+    """Drop-in for qc._download_history (5y daily, dividend-adjusted —
+    the same dialect the validated playbook was built on)."""
+    return _aggs(ticker, 1825, adjust_divs=True)[["Open", "High", "Low", "Price"]]
 
 
 def polygon_quote(ticker: str):
@@ -97,7 +137,7 @@ def polygon_universe_hist(batch: list) -> dict:
     out = {}
     for t in batch:
         try:
-            df = _aggs(t, 1825)
+            df = _aggs(t, 1825, adjust_divs=True)
             if len(df) >= 750:
                 out[t] = df
         except Exception:
@@ -137,7 +177,7 @@ def feed_check(tickers: list) -> dict:
                 if isinstance(raw.columns, pd.MultiIndex):
                     raw.columns = raw.columns.get_level_values(0)
                 yf_df = raw.rename(columns={"Close": "Price"})
-            pg_df = _aggs(t, 90)
+            pg_df = _aggs(t, 90, adjust_divs=True)
             a = yf_df["Price"].dropna().tail(30)
             b = pg_df["Price"].dropna().tail(30)
             a.index = a.index.normalize()
