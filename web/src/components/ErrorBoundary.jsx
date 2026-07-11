@@ -36,7 +36,7 @@ export default class ErrorBoundary extends Component {
       >
         <span style={{ fontSize: 32 }}>⚠️</span>
         <p style={{ margin: 0, fontSize: 15, maxWidth: 320, lineHeight: 1.5 }}>
-          Something went wrong loading N-CORE. Reloading usually fixes it.
+          Something went wrong loading N-CORE⚡️. Reloading usually fixes it.
         </p>
         <button
           type="button"

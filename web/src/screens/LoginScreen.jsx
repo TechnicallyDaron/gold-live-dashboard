@@ -96,7 +96,7 @@ export default function LoginScreen({ dissolving = false, onDissolved, initialEr
 
       <div className="portal-card">
         <span className="login-mark">N</span>
-        <h1 className="login-title">N-CORE</h1>
+        <h1 className="login-title">N-CORE⚡️</h1>
         <p className="login-subtitle">Nyarko's Trade Manager</p>
 
         <div className="login-field">

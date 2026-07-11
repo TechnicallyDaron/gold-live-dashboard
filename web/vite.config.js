@@ -17,8 +17,8 @@ export default defineConfig({
       },
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: "N-CORE — Nyarko's Trade Manager",
-        short_name: 'N-CORE',
+        name: 'N-CORE⚡️',
+        short_name: 'N-CORE⚡️',
         description: "Nyarko's Trade Manager — live bias, quotes, and guarded positions.",
         start_url: '/',
         scope: '/',

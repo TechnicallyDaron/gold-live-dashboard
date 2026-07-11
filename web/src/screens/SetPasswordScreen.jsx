@@ -56,7 +56,7 @@ export default function SetPasswordScreen({ mode = 'invite', onComplete }) {
 
       <div className="portal-card">
         <span className="login-mark">N</span>
-        <h1 className="login-title">N-CORE</h1>
+        <h1 className="login-title">N-CORE⚡️</h1>
         <p className="login-subtitle">{mode === 'recovery' ? 'Reset your password' : 'Set your password'}</p>
 
         {done ? (

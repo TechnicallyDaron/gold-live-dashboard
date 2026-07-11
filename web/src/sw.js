@@ -13,14 +13,14 @@ registerRoute(
 )
 
 self.addEventListener('push', (event) => {
-  let data = { title: 'N-CORE', body: '' }
+  let data = { title: 'N-CORE⚡️', body: '' }
   try {
     data = event.data.json()
   } catch {
     data.body = event.data?.text() || ''
   }
   event.waitUntil(
-    self.registration.showNotification(data.title || 'N-CORE', {
+    self.registration.showNotification(data.title || 'N-CORE⚡️', {
       body: data.body || '',
       icon: '/pwa-192.png',
       badge: '/pwa-192.png',
