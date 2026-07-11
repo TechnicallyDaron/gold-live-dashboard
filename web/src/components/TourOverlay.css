@@ -1,0 +1,110 @@
+.tour-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+}
+
+.tour-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  transition: box-shadow 0.25s ease, top 0.25s ease, left 0.25s ease, width 0.25s ease, height 0.25s ease;
+}
+
+.tour-backdrop--cutout {
+  position: fixed;
+  inset: auto;
+  background: transparent;
+  border-radius: 14px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.72);
+  pointer-events: none;
+}
+
+.tour-card {
+  position: fixed;
+  z-index: 301;
+  padding: 18px;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bottom));
+  border: 1px solid var(--border);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+.tour-card--center {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(340px, calc(100vw - 32px));
+}
+
+.tour-card-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 6px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tour-card-body {
+  margin: 8px 26px 16px 2px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.tour-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tour-dots {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tour-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.tour-dot--active {
+  background: var(--volt);
+}
+
+.tour-card-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.tour-btn {
+  padding: 9px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tour-btn--ghost {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+}
+
+.tour-btn--primary {
+  border: 1px solid var(--volt);
+  background: rgba(0, 229, 255, 0.12);
+  color: var(--volt);
+}

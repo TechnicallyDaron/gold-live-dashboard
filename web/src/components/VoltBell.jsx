@@ -38,7 +38,7 @@ export default function VoltBell() {
 
   return (
     <div className="volt-bell-wrap">
-      <button type="button" className="volt-bell" onClick={toggle} aria-label="Notifications">
+      <button type="button" className="volt-bell" onClick={toggle} aria-label="Notifications" data-tour="bell">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <path
             d="M18 16v-5a6 6 0 1 0-12 0v5l-1.5 2.5h15L18 16Z"

@@ -2,11 +2,11 @@ import { NavLink } from 'react-router-dom'
 import './TabBar.css'
 
 const TABS = [
-  { to: '/hub', label: 'HUB', icon: HubIcon, end: true },
-  { to: '/bias', label: 'Bias', icon: BiasIcon },
-  { to: '/chart', label: 'Chart', icon: ChartIcon },
-  { to: '/news', label: 'News', icon: NewsIcon },
-  { to: '/positions', label: 'Positions', icon: PositionsIcon },
+  { to: '/hub', label: 'HUB', icon: HubIcon, end: true, tourId: 'tab-hub' },
+  { to: '/bias', label: 'Bias', icon: BiasIcon, tourId: 'tab-bias' },
+  { to: '/chart', label: 'Chart', icon: ChartIcon, tourId: 'tab-chart' },
+  { to: '/news', label: 'News', icon: NewsIcon, tourId: 'tab-news' },
+  { to: '/positions', label: 'Positions', icon: PositionsIcon, tourId: 'tab-positions' },
 ]
 
 function HubIcon({ active }) {
@@ -60,8 +60,8 @@ function PositionsIcon({ active }) {
 export default function TabBar() {
   return (
     <nav className="tab-bar" role="navigation" aria-label="Primary">
-      {TABS.map(({ to, label, icon: Icon, end }) => (
-        <NavLink key={to} to={to} end={end} className="tab-item">
+      {TABS.map(({ to, label, icon: Icon, end, tourId }) => (
+        <NavLink key={to} to={to} end={end} className="tab-item" data-tour={tourId}>
           {({ isActive }) => (
             <>
               <Icon active={isActive} />

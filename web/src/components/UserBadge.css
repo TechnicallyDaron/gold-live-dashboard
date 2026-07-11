@@ -46,6 +46,25 @@
   word-break: break-all;
 }
 
+.user-badge-action {
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.user-badge-hint {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
 .user-badge-signout {
   padding: 8px;
   border-radius: var(--radius-sm);

@@ -1,0 +1,62 @@
+.tour-prompt-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 24px;
+}
+
+.tour-prompt-box {
+  width: 100%;
+  max-width: 320px;
+  padding: 20px;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bottom));
+  border: 1px solid var(--border);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+.tour-prompt-title {
+  display: block;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.tour-prompt-body {
+  margin: 0 0 18px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.tour-prompt-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.tour-prompt-btn {
+  flex: 1;
+  padding: 11px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tour-prompt-btn--ghost {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+}
+
+.tour-prompt-btn--primary {
+  border: 1px solid var(--volt);
+  background: rgba(0, 229, 255, 0.12);
+  color: var(--volt);
+}

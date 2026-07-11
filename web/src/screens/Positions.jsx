@@ -54,7 +54,9 @@ export default function Positions() {
           <PositionCard key={p.id} position={p} onRequestClose={() => setCloseTarget(p)} />
         ))}
 
-      <JournalDashboard entries={entries} aggregates={aggregates} loading={!entries} />
+      <div data-tour="journal">
+        <JournalDashboard entries={entries} aggregates={aggregates} loading={!entries} />
+      </div>
 
       {showForm && (
         <PositionForm

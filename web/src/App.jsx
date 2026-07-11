@@ -10,6 +10,7 @@ import LoginScreen from './screens/LoginScreen.jsx'
 import SetPasswordScreen from './screens/SetPasswordScreen.jsx'
 import OnboardingBaskets from './screens/OnboardingBaskets.jsx'
 import ToastHost from './components/ToastHost.jsx'
+import TourManager from './components/TourManager.jsx'
 import { useAuth } from './lib/useAuth.js'
 import { useWatchlist } from './lib/useWatchlist.js'
 import { useAuthHashHandler } from './lib/useAuthHashHandler.js'
@@ -20,6 +21,10 @@ function App() {
   const { gateEnabled, ready, signedIn, user } = useAuth()
   const { watchlist } = useWatchlist(!gateEnabled || (ready && signedIn))
   const [onboardingDone, setOnboardingDone] = useState(false)
+  // Only true when THIS session's onboarding hand-off just happened — a
+  // returning user whose watchlist is already populated never sets this,
+  // so the tour prompt only ever fires for a genuinely new user.
+  const [justOnboarded, setJustOnboarded] = useState(false)
   const { processed: hashProcessed, pendingPasswordType, hashError, clearPendingPassword } = useAuthHashHandler()
 
   // Only play the Portal's dissolve transition for a sign-in that happens
@@ -96,8 +101,14 @@ function App() {
       <>
         <OnboardingBaskets
           userId={user?.id}
-          onDone={() => setOnboardingDone(true)}
-          onSkip={() => setOnboardingDone(true)}
+          onDone={() => {
+            setOnboardingDone(true)
+            setJustOnboarded(true)
+          }}
+          onSkip={() => {
+            setOnboardingDone(true)
+            setJustOnboarded(true)
+          }}
         />
         {dissolveOverlay}
         <ToastHost />
@@ -123,6 +134,7 @@ function App() {
       <TabBar />
       {dissolveOverlay}
       <ToastHost />
+      <TourManager userId={user?.id} autoPromptTrigger={justOnboarded} />
     </>
   )
 }
